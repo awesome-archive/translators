@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2012-06-24 14:22:53"
+	"lastUpdated": "2017-04-01 14:22:53"
 }
 
 
@@ -44,12 +44,14 @@ function getTitles(doc) {
 }
 
 function detectWeb(doc, url) {
-	if (url.match(/\/doi\/abs\/10\.|\/doi\/full\/10\./)) {
+/*	if (url.match(/\/doi\/abs\/10\.|\/doi\/full\/10\./)) {
 		return "journalArticle";
-	} else if(url.match(/\/action\/doSearch\?|\/toc\//))
+	} else if (url.match(/\/action\/doSearch\?|\/toc\//))
 		{
 		return "multiple";
-	}
+		} */
+    //currently this triggers a massive download that shuts down Zotero for a significant time; turning it off until I have a fix (which should be shortly)
+    return false;
 }
 
 
@@ -58,15 +60,15 @@ function doWeb(doc, url) {
 		var items = new Object();
 		var titles = getTitles(doc);
 		var doi;
-		for(var i=0, n=titles.length; i<n; i++) {
+		for (var i=0, n=titles.length; i<n; i++) {
 			doi = titles[i].href.match(/\/doi\/(?:abs|full)\/(10\.[^?#]+)/);
-			if(doi) {
+			if (doi) {
 				items[doi[1]] = titles[i].textContent;
 			}
 		}
 
 		Zotero.selectItems(items, function(selectedItems){
-			if(!selectedItems) return true;
+			if (!selectedItems) return true;
 			
 			var dois = new Array();
 			for (var i in selectedItems) {
@@ -90,7 +92,7 @@ function finalizeItem(item, doc, doi, baseUrl) {
 		url: pdfurl + doi,
 		mimeType: 'application/pdf'
 	}];
-	if(doc) {
+	if (doc) {
 		item.attachments.push({
 			title: 'Snapshot',
 			document: doc
@@ -116,7 +118,7 @@ function scrape(doc, url, dois) {
 	var risFormat = '&format=ris';
 	var bibtexFormat = '&format=bibtex';
 
-	for(var i=0, n=dois.length; i<n; i++) {
+	for (var i=0, n=dois.length; i<n; i++) {
 		(function(doi) {
 			ZU.doPost(postUrl, postBody + doi + bibtexFormat, function(text) {
 				var translator = Zotero.loadTranslator("import");

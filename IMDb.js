@@ -1,23 +1,22 @@
 {
 	"translatorID": "a30274ac-d3d1-4977-80f4-5320613226ec",
 	"label": "IMDb",
-	"creator": "Avram Lyon",
+	"creator": "Philipp Zumstien",
 	"target": "^https?://www\\.imdb\\.com/",
-	"minVersion": "2.1",
+	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
-	"browserSupport": "gcsbv",
-	"lastUpdated": "2015-09-23 21:04:11"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2020-01-07 00:38:50"
 }
 
 /*
 	***** BEGIN LICENSE BLOCK *****
 
-	IMDB Translator
-	Copyright © 2011 Avram Lyon, ajlyon@gmail.com
-
+	Copyright © 2017 Philipp Zumstein
+	
 	This file is part of Zotero.
 
 	Zotero is free software: you can redistribute it and/or modify
@@ -36,109 +35,114 @@
 	***** END LICENSE BLOCK *****
 */
 
+// attr()/text() v2
+// eslint-disable-next-line
+function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null;}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null;}
+
 function detectWeb(doc, url) {
-	if (url.match(/\/title\/tt\d+/)) {
+	if (url.includes('/title/tt')) {
 		return "film";
-	} else if (url.match(/\/find\?/)) {
+	}
+	else if (url.includes('/find?') && getSearchResults(doc, true)) {
 		return "multiple";
 	}
+	return false;
+}
+
+function getSearchResults(doc, checkOnly) {
+	var items = {};
+	var found = false;
+	var rows = ZU.xpath(doc, '//td[contains(@class, "result_text")]');
+	for (let i = 0; i < rows.length; i++) {
+		var href = ZU.xpathText(rows[i], './a/@href');
+		var title = ZU.trimInternal(rows[i].textContent);
+		if (!href || !title) continue;
+		if (checkOnly) return true;
+		found = true;
+		items[href] = title;
+	}
+	return found ? items : false;
 }
 
 function doWeb(doc, url) {
-	var n = doc.documentElement.namespaceURI;
-	var ns = n ?
-	function (prefix) {
-		if (prefix == 'x') return n;
-		else return null;
-	} : null;
-
-	var ids = new Array();
 	if (detectWeb(doc, url) == "multiple") {
-		var results = doc.evaluate('//td[a[contains(@href,"/title/tt")]]', doc, ns, XPathResult.ANY_TYPE, null);
-		var items = {};
-		var result;
-		while (result = results.iterateNext()) {
-			var link = doc.evaluate('./a[contains(@href,"/title/tt")]', result, ns, XPathResult.ANY_TYPE, null).iterateNext();
-			var title = result.textContent;
-			//Zotero.debug(link.href);
-			var url = link.href.match(/\/title\/(tt\d+)/)[1];
-			items[url] = title;
-		}
-
-		Zotero.selectItems(items, function (items) {
+		Zotero.selectItems(getSearchResults(doc, false), function (items) {
 			if (!items) {
-				Zotero.done();
-				return true;
+				return;
 			}
+			var articles = [];
 			for (var i in items) {
-				ids.push(i);
+				articles.push(i);
 			}
-			apiFetch(ids);
+			ZU.processDocuments(articles, scrape);
 		});
-	} else {
-		var id = url.match(/\/title\/(tt\d+)/)[1];
-		apiFetch([id]);
+	}
+	else {
+		scrape(doc, url);
 	}
 }
 
-// Takes IMDB IDs and makes items
-function apiFetch(ids) {
-	var apiRoot = "http://omdbapi.com/?i="; //&tomatoes=true removed as it often breaks the API
-	for (i in ids) ids[i] = apiRoot + ids[i];
-	Zotero.Utilities.doGet(ids, parseIMDBapi);
-}
-
-// parse result from imdbapi.com
-// should be json
-function parseIMDBapi(text, response, url) {
-	//Zotero.debug(url);
-	//Zotero.debug(text);
-	try {
-		var obj = JSON.parse(text);
-	} catch (e) {
-		Zotero.debug("JSON parse error");
-		throw e;
-	}
+function scrape(doc, _url) {
 	var item = new Zotero.Item("film");
-	item.title = obj.Title;
-	item.date = obj.Released ? obj.Released : obj.Year;
-	item.genre = obj.Genre;
-	if (obj.Director) item = addCreator(item, obj.Director, "director");
-	if (obj.Writer) item = addCreator(item, obj.Writer, "scriptwriter");
-	if (obj.Actors) item = addCreator(item, obj.Actors, "contributor");
-	item.abstractNote = obj.Plot;
-	item.attachments.push({
-		url: obj.Poster,
-		title: "Poster"
-	});
-	item.runningTime = obj.Runtime;
-	item.extra = "IMDB ID: " + obj.imdbID;
-	item.extra += "\nIMDB Rating: " + obj.imdbRating + " (" + obj.imdbVotes + " votes)";
-	//rotten tomatoes ranking break the API frequently
-	//item.extra += "; Rotten Tomatoes: " + obj.tomatoRating + " (" + obj.tomatoReviews + " reviews " + " " + obj.tomatoFresh + " fresh, " + obj.tomatoRotten + " rotten)" + ", Tomato Meter: " + obj.tomatoMeter;
+	let json = JSON.parse(text(doc, 'script[type="application/ld+json"]'));
+	item.title = json.name;// note that json only has the original title
+	var transTitle = ZU.trimInternal(ZU.xpathText(doc, "//div[@class='title_wrapper']/h1/text()")).slice(0, -2);
+	if (transTitle && transTitle !== item.title) addExtra(item, "Translated title: " + transTitle);
+	item.date = json.datePublished;
+	item.runningTime = "duration" in json ? json.duration.replace("PT", "").toLowerCase() : "";
+	item.genre = Array.isArray(json.genre) ? json.genre.join(", ") : json.genre;
+	item.abstractNote = json.description;
+	var creatorsMapping = {
+		director: "director",
+		creator: "scriptwriter",
+		actor: "contributor"
+	};
+	for (var role in creatorsMapping) {
+		if (!json[role]) continue;
+		var creators = json[role];
+		if (!Array.isArray(creators)) {
+			item.creators.push(ZU.cleanAuthor(creators.name, creatorsMapping[role]));
+		}
+		else {
+			for (var i = 0; i < creators.length; i++) {
+				if (creators[i]["@type"] == "Person") item.creators.push(ZU.cleanAuthor(creators[i].name, creatorsMapping[role]));
+			}
+		}
+	}
+	let companyNodes = doc.querySelectorAll('a[href*="/company/"]');
+	let companies = [];
+	for (let company of companyNodes) {
+		companies.push(company.textContent);
+	}
+	item.distributor = companies.join(', ');
+	var pageId = ZU.xpathText(doc, '//meta[@property="pageId"]/@content');
+	if (pageId) {
+		addExtra(item, "IMDb ID: " + pageId);
+	}
+	addExtra(item, "event-location: " + text(doc, 'a[href*="title?country_of_origin"]'));
+	item.tags = "keywords" in json ? json.keywords.split(",") : [];
 	item.complete();
 }
 
-function addCreator(item, creator, type) {
-	if (creator == "N/A") {
-		Zotero.debug("Discarding " + type + "=" + creator);
-		return item;
+function addExtra(item, value) {
+	if (!item.extra) {
+		item.extra = '';
 	}
-	var broken = creator.split(",");
-	for (i in broken) {
-		item.creators.push(Zotero.Utilities.cleanAuthor(broken[i], type));
+	else {
+		item.extra += "\n";
 	}
-	return item;
+	item.extra += value;
 }
+
 /** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://www.imdb.com/title/tt0089276/",
+		"url": "https://www.imdb.com/title/tt0089276/",
 		"items": [
 			{
 				"itemType": "film",
-				"title": "The Official Story",
+				"title": "La historia oficial",
 				"creators": [
 					{
 						"firstName": "Luis",
@@ -156,13 +160,13 @@ var testCases = [
 						"creatorType": "scriptwriter"
 					},
 					{
-						"firstName": "Héctor",
-						"lastName": "Alterio",
+						"firstName": "Norma",
+						"lastName": "Aleandro",
 						"creatorType": "contributor"
 					},
 					{
-						"firstName": "Norma",
-						"lastName": "Aleandro",
+						"firstName": "Héctor",
+						"lastName": "Alterio",
 						"creatorType": "contributor"
 					},
 					{
@@ -176,18 +180,31 @@ var testCases = [
 						"creatorType": "contributor"
 					}
 				],
-				"date": "08 Nov 1985",
-				"abstractNote": "After the end of the Dirty War, a high school teacher sets out to find out who the mother of her adopted daughter is.",
-				"extra": "IMDB ID: tt0089276\nIMDB Rating: 7.7 (4,844 votes)",
+				"date": "1985-04-03",
+				"abstractNote": "La historia oficial is a movie starring Norma Aleandro, Héctor Alterio, and Chunchuna Villafañe. During the final months of Argentinian Military Dictatorship in 1983, a high school teacher sets out to find out who the mother of her...",
+				"distributor": "Historias Cinematograficas Cinemania,  Progress Communications",
+				"extra": "Translated title: The Official Story\nIMDb ID: tt0089276\nevent-location: Argentina",
 				"genre": "Drama, History, War",
 				"libraryCatalog": "IMDb",
-				"runningTime": "112 min",
-				"attachments": [
+				"runningTime": "1h52m",
+				"attachments": [],
+				"tags": [
 					{
-						"title": "Poster"
+						"tag": "adopted daughter"
+					},
+					{
+						"tag": "high school teacher"
+					},
+					{
+						"tag": "lawyer"
+					},
+					{
+						"tag": "school"
+					},
+					{
+						"tag": "thumb sucking"
 					}
 				],
-				"tags": [],
 				"notes": [],
 				"seeAlso": []
 			}
@@ -195,16 +212,16 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.imdb.com/find?q=shakespeare&s=tt",
+		"url": "https://www.imdb.com/find?q=shakespeare&s=tt",
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://www.imdb.com/title/tt0060613/",
+		"url": "https://www.imdb.com/title/tt0060613/",
 		"items": [
 			{
 				"itemType": "film",
-				"title": "Skin, Skin",
+				"title": "Käpy selän alla",
 				"creators": [
 					{
 						"firstName": "Mikko",
@@ -242,18 +259,31 @@ var testCases = [
 						"creatorType": "contributor"
 					}
 				],
-				"date": "21 Oct 1966",
-				"abstractNote": "N/A",
-				"extra": "IMDB ID: tt0060613\nIMDB Rating: 6.9 (411 votes)",
+				"date": "1966-10-21",
+				"abstractNote": "Käpy selän alla is a movie starring Eero Melasniemi, Kristiina Halkola, and Pekka Autiovuori. Depiction of four urban youths and their excursion to the countryside.",
+				"distributor": "FJ-Filmi",
+				"extra": "Translated title: Amour libre\nIMDb ID: tt0060613\nevent-location: Finland",
 				"genre": "Drama",
 				"libraryCatalog": "IMDb",
-				"runningTime": "89 min",
-				"attachments": [
+				"runningTime": "1h29m",
+				"attachments": [],
+				"tags": [
 					{
-						"title": "Poster"
+						"tag": "countryside"
+					},
+					{
+						"tag": "drunk"
+					},
+					{
+						"tag": "male female relationship"
+					},
+					{
+						"tag": "topless"
+					},
+					{
+						"tag": "youth"
 					}
 				],
-				"tags": [],
 				"notes": [],
 				"seeAlso": []
 			}

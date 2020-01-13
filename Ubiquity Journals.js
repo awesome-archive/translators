@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2015-10-19 05:23:30"
+	"lastUpdated": "2019-06-10 23:10:24"
 }
 
 /*
@@ -31,35 +31,35 @@
 	You should have received a copy of the GNU Affero General Public License
 	along with Zotero.  If not, see <http://www.gnu.org/licenses/>.
 */
-function detectWeb(doc, url) {
+function detectWeb(doc, _url) {
 	var ubiquitytest = doc.getElementsByClassName("press-logo");
-	// this doesn't work always, so we're only using it on single items. 
+	// this doesn't work always, so we're only using it on single items.
 	// if the translator doesn't detect there, we still get good EM import
 	// For multiples we check getSearchResults
-	if(ubiquitytest[0] && ubiquitytest[0].href.indexOf(
-			"http://www.ubiquitypress.com") != -1) {
-		if(ZU.xpathText(doc, '//meta[@name="citation_journal_title"]/@content')) {
+	if (ubiquitytest[0] && ubiquitytest[0].href.includes("http://www.ubiquitypress.com")) {
+		if (ZU.xpathText(doc, '//meta[@name="citation_journal_title"]/@content')) {
 			return "journalArticle";
 		}
 	}
-	if(getSearchResults(doc, true)) {
-		return "multiple"
+	if (getSearchResults(doc, true)) {
+		return "multiple";
 	}
 	return false;
 }
 
 function doWeb(doc, url) {
 	var itemType = detectWeb(doc, url);
-	if(itemType === 'multiple') {
-		Zotero.selectItems(getSearchResults(doc), function(items) {
-			if(!items) return true;
+	if (itemType === 'multiple') {
+		Zotero.selectItems(getSearchResults(doc), function (items) {
+			if (!items) return;
 			var urls = [];
-			for(var i in items) {
+			for (var i in items) {
 				urls.push(i);
 			}
 			ZU.processDocuments(urls, scrape);
-		})
-	} else {
+		});
+	}
+	else {
 		scrape(doc, url);
 	}
 }
@@ -70,10 +70,10 @@ function getSearchResults(doc, checkOnly) {
 		),
 		items = {},
 		found = false;
-	for(var i = 0; i < results.length; i++) {
+	for (var i = 0; i < results.length; i++) {
 		var title = results[i].textContent;
-		if(!title) continue;
-		if(checkOnly) return true;
+		if (!title) continue;
+		if (checkOnly) return true;
 		found = true;
 		title = title.trim();
 		items[results[i].href] = title;
@@ -87,13 +87,13 @@ function scrape(doc, url) {
 	// use the Embedded Metadata translator
 	translator.setTranslator('951c027d-74ac-47d4-a107-9c3069ab7b48');
 	translator.setDocument(doc);
-	translator.setHandler('itemDone', function(obj, item) {
-		if(abstract) {
+	translator.setHandler('itemDone', function (obj, item) {
+		if (abstract) {
 			item.abstractNote = ZU.cleanTags(abstract.trim());
 		}
 		item.complete();
 	});
-	translator.getTranslatorObject(function(trans) {
+	translator.getTranslatorObject(function (trans) {
 		trans.doWeb(doc, url);
 	});
 }/** BEGIN TEST CASES **/
@@ -105,7 +105,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://journal.eahn.org/articles/10.5334/ah.bd/",
+		"url": "https://journal.eahn.org/articles/10.5334/ah.bd/",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -117,7 +117,7 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"date": "2014-03-19T12:43:17",
+				"date": "2014-03-19",
 				"DOI": "10.5334/ah.bd",
 				"ISSN": "2050-5833",
 				"abstractNote": "This paper explores the relation between the ‘DIY’ (‘do-it-yourself’) movement and ‘DIY architecture’, and the notion of social transformation, in examples of DIY manuals and discourse of North America drawn from the 1940s to the 1970s. The DIY movement emerged as a significant phenomenon in North America of the 1950s, where it was associated with a mainstream audience and a residential market. By the 1960s, the DIY approach was embraced by the North American counterculture as a self-sustaining sensibility that could overcome a reliance on the mainstream, consumerist society that spurned it. On the surface, the association of DIY with the counterculture and countercultural architects appears to denote a significant ideological shift from its original association with the beliefs and culture of mainstream North America and the nuclear family. However, one of the key characterisations of the DIY movement identified in the present paper is the way it is bound to the notion of social identity and transformation, regardless of ideology. Particular attention is paid to DIY manuals and discourse of the 1950s.",

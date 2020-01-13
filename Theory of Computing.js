@@ -9,10 +9,10 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcv",
-	"lastUpdated": "2016-03-23 16:47:35"
+	"lastUpdated": "2019-06-10 22:52:50"
 }
 
-/*****
+/*
    Copyright 2013, Piyush Srivastava.
 
    This program is free software: you can redistribute it and/or modify it
@@ -28,13 +28,11 @@
    You should have received a copy of the GNU Affero General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-*****/
+*/
 
 
-
-
-/*****
-  Theory of Computing translator 
+/*
+  Theory of Computing translator
   *****************************
 
 
@@ -56,7 +54,7 @@
 
  while that of the articles looks like
 
- DOMAIN/articles/v[0-9]{3}a{0-9]{3}/. 
+ DOMAIN/articles/v[0-9]{3}a{0-9]{3}/.
 
  These formats are used by detectWeb to find out whether we are looking at a
  graduate survey ("Book") or a journal article.
@@ -64,130 +62,125 @@
  The theory of computing journal provides the PDF file for a given article (say
  gs001) at the url DOMAIN/article/gs001/gs001.pdf.
 
- ******/
+*/
 
 
-
-
-//A Regexp for extracting the Domain
+// A Regexp for extracting the Domain
 
 var surveyRegexp = new RegExp("articles/(gs[^/]+)");
 var journalRegexp = new RegExp("articles/(v[^/]+)");
 
-function detectWeb(doc, url){
-	if (surveyRegexp.test(url))
-		return "book";
-	else
-		return "journalArticle";
+function detectWeb(doc, url) {
+	if (surveyRegexp.test(url)) return "book";
+	else return "journalArticle";
 }
 
-function doWeb(doc, url){
+function doWeb(doc, url) {
 	var typeRegExp;
 	var type = detectWeb(doc, url);
 
-	//Select the right regexp according to the article type
-	if (type == "journalArticle")
-		typeRegExp = journalRegexp;
-	else
-		typeRegExp = surveyRegexp;
+	// Select the right regexp according to the article type
+	if (type == "journalArticle") typeRegExp = journalRegexp;
+	else typeRegExp = surveyRegexp;
 
 	var urlData = typeRegExp.exec(url);
-	//urlData is an Array of three elements, with the element at index 1 containg the
-	//base domain of the mirror being accesses, and the element at index 2
-	//containing the article ID.
+	// urlData is an Array of three elements, with the element at index 1 containg the
+	// base domain of the mirror being accesses, and the element at index 2
+	// containing the article ID.
 
 	var articleID = urlData[1];
 
-	//We now start constructing the Zoetro item
+	// We now start constructing the Zoetro item
 	var newItem = new Zotero.Item(type);
 
-	//Store the snapshot and the PDF file
+	// Store the snapshot and the PDF file
 	newItem.attachments.push({
-		title: "Theory of Computing Snapshot",
-		document: doc});
+		title: "Theory of Computing Snapshot", document: doc
+	});
 	var pdfLink = articleID + ".pdf";
 	newItem.attachments.push({
 		title: "Theory of computing Full Text PDF",
 		mimeType: "application/pdf",
-		url:pdfLink});
+		url: pdfLink
+	});
 
-	//Get the article topLine
+	// Get the article topLine
 	var topLine = ZU.xpathText(doc, '//div[@id="articletopline"]');
 
-	//Get the article publication date lines
+	// Get the article publication date lines
 	var pubDateLines = ZU.xpathText(doc, '//div[@id="articledates"]');
 
-	//Get the article copyright line (to determine authors) 
-	//This seems the most consistent way of determining the authors for this
-	//journal.
+	// Get the article copyright line (to determine authors)
+	// This seems the most consistent way of determining the authors for this
+	// journal.
 	var authorLine = ZU.xpathText(doc, '//div[@id="copyright"]/a[1]');
 
 	var keywordLine = ZU.xpathText(doc, '(//div[@class="hang"])[3]');
 
 	var DOI = ZU.xpathText(doc, '//div[@id="doi"]');
 
-	//Now start filling up data
-	//Title
+	// Now start filling up data
+	// Title
 	var title = ZU.xpathText(doc, '//div[@id="articletitle"]');
-	if (!title)
-		title = ZU.xpathText(doc, '//div[@id="title"]');
+	if (!title) title = ZU.xpathText(doc, '//div[@id="title"]');
 	newItem.title = title;
 
-	//DOI and URL
+	// DOI and URL
 	newItem.DOI = ZU.cleanDOI(DOI);
 	newItem.url = url;
 
-	//Publcication date line
-	if (pubDateLines){
+	// Publcication date line
+	if (pubDateLines) {
 		var pubDateRegexp = /Published:\s+(\w+\s+[0-9]+(?:,|\s)+[0-9]+)/gm;
 		newItem.date = pubDateRegexp.exec(pubDateLines)[1];
 
-		//This also contain page information for surveys
-		if (type == "book"){
+		// This also contain page information for surveys
+		if (type == "book") {
 			var pageNum = /([0-9]+)\s+pages/.exec(pubDateLines)[1];
 			newItem.numPages = pageNum;
 		}
 	}
 
-	//Keywords
-	if (keywordLine){
-		keywords = ZU.trimInternal(/Keywords:\s+(.*)/.exec(keywordLine)[1]);
-		keywordList = keywords.split(/,\s+/);
+	// Keywords
+	if (keywordLine) {
+		let keywords = ZU.trimInternal(/Keywords:\s+(.*)/.exec(keywordLine)[1]);
+		let keywordList = keywords.split(/,\s+/);
 		newItem.tags = keywordList;
 	}
 
-	//Author
-	if (authorLine){
+	// Author
+	if (authorLine) {
 		authorLine = ZU.trimInternal(authorLine);
-		authors = /[^0-9]+[0-9]+\s+(.*)/.exec(authorLine)[1];
+		let authors = /[^0-9]+[0-9]+\s+(.*)/.exec(authorLine)[1];
 		authors = authors.replace(/,?\s+and\s+/, ", ");
-		authorList = authors.split(/\s*,\s+/);
-		for (author in authorList){
+		let authorList = authors.split(/\s*,\s+/);
+		for (let author in authorList) {
 			newItem.creators.push(ZU.cleanAuthor(authorList[author], "author"));
 		}
 	}
 
-	//Article number etc.
-	if (topLine){
+	// Article number etc.
+	if (topLine) {
 		topLine = ZU.trimInternal(topLine);
-		if (type == "book"){
-			number = /Graduate Surveys\s+([0-9]+)/.exec(topLine)[1];
-			newItem.seriesNumber = number;    
-		} else if (type == "journalArticle"){
-			volumeData = /Volume\s+([0-9]+).*Article\s+([0-9]+)\s+pp\.\s+([0-9]+)-([0-9]+)/.exec(topLine);
+		if (type == "book") {
+			let number = /Graduate Surveys\s+([0-9]+)/.exec(topLine)[1];
+			newItem.seriesNumber = number;
+		}
+		else if (type == "journalArticle") {
+			let volumeData = /Volume\s+([0-9]+).*Article\s+([0-9]+)\s+pp\.\s+([0-9]+)-([0-9]+)/.exec(topLine);
 			newItem.volume = volumeData[1];
 			newItem.number = volumeData[2];
 			newItem.pages = volumeData[3] + "–" + volumeData[4];
-		}       
+		}
 	}
 
-	//Format specific data
-	if (type == "book"){
+	// Format specific data
+	if (type == "book") {
 		newItem.series = "Graduate Surveys";
 		newItem.publisher = "Theory of Computing Library";
 	}
 
-	if (type == "journalArticle"){
+	if (type == "journalArticle") {
 		newItem.publicationTitle = "Theory of Computing";
 		newItem.publisher = "Theory of Computing";
 	}
@@ -203,6 +196,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "book",
+				"title": "Variations on the Sensitivity Conjecture",
 				"creators": [
 					{
 						"firstName": "Pooya",
@@ -220,13 +214,15 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"sensitivity",
-					"block sensitivity",
-					"complexity measures of Boolean functions"
-				],
-				"seeAlso": [],
+				"date": "June 22, 2011",
+				"DOI": "10.4086/toc.gs.2011.004",
+				"accessDate": "CURRENT_TIMESTAMP",
+				"libraryCatalog": "Theory of Computing",
+				"numPages": "27",
+				"publisher": "Theory of Computing Library",
+				"series": "Graduate Surveys",
+				"seriesNumber": "4",
+				"url": "http://theoryofcomputing.org/articles/gs004/",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -236,16 +232,13 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Variations on the Sensitivity Conjecture",
-				"DOI": "10.4086/toc.gs.2011.004",
-				"url": "http://theoryofcomputing.org/articles/gs004/",
-				"date": "June 22, 2011",
-				"numPages": "27",
-				"seriesNumber": "4",
-				"series": "Graduate Surveys",
-				"publisher": "Theory of Computing Library",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [
+					"block sensitivity",
+					"complexity measures of Boolean functions",
+					"sensitivity"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
@@ -255,6 +248,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "journalArticle",
+				"title": "Optimal Hitting Sets for Combinatorial Shapes",
 				"creators": [
 					{
 						"firstName": "Aditya",
@@ -272,15 +266,16 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"derandomization",
-					"expanders",
-					"explicit construction",
-					"hitting sets",
-					"perfect hashing"
-				],
-				"seeAlso": [],
+				"date": "May 25, 2013",
+				"DOI": "10.4086/toc.2013.v009a013",
+				"accessDate": "CURRENT_TIMESTAMP",
+				"libraryCatalog": "Theory of Computing",
+				"number": "13",
+				"pages": "441–470",
+				"publicationTitle": "Theory of Computing",
+				"publisher": "Theory of Computing",
+				"url": "http://toc.nada.kth.se/articles/v009a013/index.html",
+				"volume": "9",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -290,17 +285,15 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Optimal Hitting Sets for Combinatorial Shapes",
-				"DOI": "10.4086/toc.2013.v009a013",
-				"url": "http://toc.nada.kth.se/articles/v009a013/index.html",
-				"date": "May 25, 2013",
-				"volume": "9",
-				"number": "13",
-				"pages": "441–470",
-				"publicationTitle": "Theory of Computing",
-				"publisher": "Theory of Computing",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [
+					"derandomization",
+					"expanders",
+					"explicit construction",
+					"hitting sets",
+					"perfect hashing"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
@@ -310,6 +303,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "book",
+				"title": "Selected Results in Additive Combinatorics: An Exposition",
 				"creators": [
 					{
 						"firstName": "Emanuele",
@@ -317,12 +311,16 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"additive combinatorics",
-					"linearity testing"
-				],
-				"seeAlso": [],
+				"date": "May 15, 2011",
+				"DOI": "10.4086/toc.gs.2011.003",
+				"accessDate": "CURRENT_TIMESTAMP",
+				"libraryCatalog": "Theory of Computing",
+				"numPages": "15",
+				"publisher": "Theory of Computing Library",
+				"series": "Graduate Surveys",
+				"seriesNumber": "3",
+				"shortTitle": "Selected Results in Additive Combinatorics",
+				"url": "http://tocmirror.cs.tau.ac.il/articles/gs003/index.html",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -332,17 +330,12 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Selected Results in Additive Combinatorics: An Exposition",
-				"DOI": "10.4086/toc.gs.2011.003",
-				"url": "http://tocmirror.cs.tau.ac.il/articles/gs003/index.html",
-				"date": "May 15, 2011",
-				"numPages": "15",
-				"seriesNumber": "3",
-				"series": "Graduate Surveys",
-				"publisher": "Theory of Computing Library",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP",
-				"shortTitle": "Selected Results in Additive Combinatorics"
+				"tags": [
+					"additive combinatorics",
+					"linearity testing"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
@@ -352,6 +345,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "journalArticle",
+				"title": "Deterministic History-Independent Strategies for Storing Information on Write-Once Memories",
 				"creators": [
 					{
 						"firstName": "Tal",
@@ -369,17 +363,16 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"history-independent",
-					"write-once memory",
-					"tamper-evident",
-					"vote storage mechanism",
-					"information-theoretic security",
-					"conflict resolution",
-					"expander graphs"
-				],
-				"seeAlso": [],
+				"date": "May 23, 2009",
+				"DOI": "10.4086/toc.2009.v005a002",
+				"accessDate": "CURRENT_TIMESTAMP",
+				"libraryCatalog": "Theory of Computing",
+				"number": "2",
+				"pages": "43–67",
+				"publicationTitle": "Theory of Computing",
+				"publisher": "Theory of Computing",
+				"url": "http://toc.ilab.sztaki.hu/articles/v005a002/index.html",
+				"volume": "5",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -389,26 +382,27 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Deterministic History-Independent Strategies for Storing Information on Write-Once Memories",
-				"DOI": "10.4086/toc.2009.v005a002",
-				"url": "http://toc.ilab.sztaki.hu/articles/v005a002/index.html",
-				"date": "May 23, 2009",
-				"volume": "5",
-				"number": "2",
-				"pages": "43–67",
-				"publicationTitle": "Theory of Computing",
-				"publisher": "Theory of Computing",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [
+					"conflict resolution",
+					"expander graphs",
+					"history-independent",
+					"information-theoretic security",
+					"tamper-evident",
+					"vote storage mechanism",
+					"write-once memory"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
 	{
 		"type": "web",
-		"url": "http://toc.cse.iitk.ac.in/articles/v009a009/index.html",
+		"url": "http://toc.nada.kth.se/articles/v009a009/index.html",
 		"items": [
 			{
 				"itemType": "journalArticle",
+				"title": "Quantum Money from Hidden Subspaces",
 				"creators": [
 					{
 						"firstName": "Scott",
@@ -421,14 +415,13 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"electronic cash",
-					"multivariate polynomials",
-					"quantum cryptography",
-					"quantum lower bounds"
-				],
-				"seeAlso": [],
+				"date": "March 11, 2013",
+				"DOI": "10.4086/toc.2013.v009a009",
+				"libraryCatalog": "Theory of Computing",
+				"pages": "349–401",
+				"publicationTitle": "Theory of Computing",
+				"url": "http://toc.nada.kth.se/articles/v009a009/index.html",
+				"volume": "9",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -438,17 +431,14 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Quantum Money from Hidden Subspaces",
-				"DOI": "10.4086/toc.2013.v009a009",
-				"url": "http://toc.cse.iitk.ac.in/articles/v009a009/index.html",
-				"date": "March 11, 2013",
-				"volume": "9",
-				"number": "9",
-				"pages": "349–401",
-				"publicationTitle": "Theory of Computing",
-				"publisher": "Theory of Computing",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [
+					"electronic cash",
+					"multivariate polynomials",
+					"quantum cryptography",
+					"quantum lower bounds"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
@@ -458,6 +448,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "book",
+				"title": "Selected Results in Additive Combinatorics: An Exposition",
 				"creators": [
 					{
 						"firstName": "Emanuele",
@@ -465,12 +456,16 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"additive combinatorics",
-					"linearity testing"
-				],
-				"seeAlso": [],
+				"date": "May 15, 2011",
+				"DOI": "10.4086/toc.gs.2011.003",
+				"accessDate": "CURRENT_TIMESTAMP",
+				"libraryCatalog": "Theory of Computing",
+				"numPages": "15",
+				"publisher": "Theory of Computing Library",
+				"series": "Graduate Surveys",
+				"seriesNumber": "3",
+				"shortTitle": "Selected Results in Additive Combinatorics",
+				"url": "http://www.cims.nyu.edu/~regev/toc/articles/gs003/",
 				"attachments": [
 					{
 						"title": "Theory of Computing Snapshot"
@@ -480,17 +475,12 @@ var testCases = [
 						"mimeType": "application/pdf"
 					}
 				],
-				"title": "Selected Results in Additive Combinatorics: An Exposition",
-				"DOI": "10.4086/toc.gs.2011.003",
-				"url": "http://www.cims.nyu.edu/~regev/toc/articles/gs003/",
-				"date": "May 15, 2011",
-				"numPages": "15",
-				"seriesNumber": "3",
-				"series": "Graduate Surveys",
-				"publisher": "Theory of Computing Library",
-				"libraryCatalog": "Theory of Computing",
-				"accessDate": "CURRENT_TIMESTAMP",
-				"shortTitle": "Selected Results in Additive Combinatorics"
+				"tags": [
+					"additive combinatorics",
+					"linearity testing"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	}

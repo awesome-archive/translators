@@ -2,7 +2,7 @@
 	"translatorID": "5dd22e9a-5124-4942-9b9e-6ee779f1023e",
 	"label": "Flickr",
 	"creator": "Sean Takats, Rintze Zelle, and Aurimas Vinckevicius",
-	"target": "^https?://(?:www\\.)?flickr\\.com/",
+	"target": "^https?://(www\\.)?flickr\\.com/",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
@@ -43,7 +43,7 @@ function getSearchResults(doc, checkOnly) {
 	}
 	
 	var items = {}, found = false;
-	for(var i=0, n=elmts.length; i<n; i++) {
+	for (var i=0, n=elmts.length; i<n; i++) {
 		var title = elmts[i].title;
 		//in photostreams, the <a> element doesn't have a title attribute
 		if (title == "") {

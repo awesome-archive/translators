@@ -9,100 +9,130 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2016-08-18 20:06:17"
+	"lastUpdated": "2019-09-08 11:33:52"
 }
 
-function detectWeb(doc, url) {
+/*
+	***** BEGIN LICENSE BLOCK *****
+
+	Copyright © 2012 Aurimas Vinckevicius
+
+	This file is part of Zotero.
+
+	Zotero is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Zotero is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+
+	***** END LICENSE BLOCK *****
+*/
+
+function detectWeb(doc, _url) {
 	var pkpLibraries = ZU.xpath(doc, '//script[contains(@src, "/lib/pkp/js/")]');
-	if ( ZU.xpathText(doc, '//a[@id="developedBy"]/@href') == 'http://pkp.sfu.ca/ojs/' ||	//some sites remove this
-		pkpLibraries.length >= 10) {
+	if (ZU.xpathText(doc, '//a[@id="developedBy"]/@href') == 'http://pkp.sfu.ca/ojs/'	// some sites remove this
+		|| pkpLibraries.length >= 1) {
 		return 'journalArticle';
 	}
+	return false;
 }
 
 function doWeb(doc, url) {
-	//use Embeded Metadata
+	// In OJS 3, up to at least version 3.1.1-2, the PDF view does not
+	// include metadata, so we must get it from the article landing page.
+	var urlParts = url.match(/(.+\/article\/view\/)([^/]+)\/[^/]+/);
+	if (urlParts) { // PDF view
+		ZU.processDocuments(urlParts[1] + urlParts[2], scrape);
+	}
+	else { // Article view
+		scrape(doc, url);
+	}
+}
+
+function scrape(doc, _url) {
+	// use Embeded Metadata
 	var trans = Zotero.loadTranslator('web');
 	trans.setTranslator('951c027d-74ac-47d4-a107-9c3069ab7b48');
 	trans.setDocument(doc);
 
-	trans.setHandler('itemDone', function(obj, item) {
-		//abstract is supplied in DC:description, so it ends up in extra
-		//abstractNote is pulled from description, which is same as title
+	trans.setHandler('itemDone', function (obj, item) {
+		if (!item.itemType) {
+			item.itemType = "journalArticle";
+		}
+		
+		if (!item.title) {
+			item.title = doc.getElementById('articleTitle');
+		}
+		
+		if (item.creators.length == 0) {
+			var authorString = doc.getElementById("authorString");
+			if (authorString) {
+				var authorsList = authorString.textContent.split(',');
+				for (let i = 0; i < authorsList.length; i++) {
+					item.creators.push(ZU.cleanAuthor(authorsList[i], "author"));
+				}
+			}
+		}
+		
+		if (item.journalAbbreviation && item.journalAbbreviation == "1") {
+			delete item.journalAbbreviation;
+		}
+		
+		var doiNode = doc.getElementById('pub-id::doi');
+		if (!item.DOI && doiNode) {
+			item.DOI = doiNode.textContent;
+		}
+		
+		// abstract is supplied in DC:description, so it ends up in extra
+		// abstractNote is pulled from description, which is same as title
 		item.abstractNote = item.extra;
 		item.extra = undefined;
 
-		//if we still don't have abstract, we can try scraping from page
-		if(!item.abstractNote) {
-			item.abstractNote = ZU.xpathText(doc, '//div[@id="articleAbstract"]/div[1]');
+		// if we still don't have abstract, we can try scraping from page
+		if (!item.abstractNote) {
+			item.abstractNote = ZU.xpathText(doc, '//div[@id="articleAbstract"]/div[1]')
+				|| ZU.xpathText(doc, '//div[contains(@class, "main_entry")]/div[contains(@class, "abstract")]');
+		}
+		if (item.abstractNote) {
+			item.abstractNote = item.abstractNote.trim().replace(/^Abstract:?\s*/, '');
 		}
 		
-		//some journals link to a PDF view page in the header, not the PDF itself
-		for(var i=0; i<item.attachments.length; i++) {
-			if(item.attachments[i].mimeType == 'application/pdf') {
+		var pdfAttachment = false;
+		
+		// some journals link to a PDF view page in the header, not the PDF itself
+		for (let i = 0; i < item.attachments.length; i++) {
+			if (item.attachments[i].mimeType == 'application/pdf') {
+				pdfAttachment = true;
 				item.attachments[i].url = item.attachments[i].url.replace(/\/article\/view\//, '/article/download/');
 			}
+		}
+		
+		var pdfUrl = doc.querySelector("a.obj_galley_link.pdf");
+		// add linked PDF if there isn't one listed in the header
+		if (!pdfAttachment && pdfUrl) {
+			item.attachments.push({
+				title: "Full Text PDF",
+				mimeType: "application/pdf",
+				url: pdfUrl.href.replace(/\/article\/view\//, '/article/download/')
+			});
 		}
 
 		item.complete();
 	});
 
 	trans.translate();
-
 }
+
+
 /** BEGIN TEST CASES **/
 var testCases = [
-	{
-		"type": "web",
-		"url": "http://cab.unime.it/journals/index.php/AAPP/article/view/AAPP.901A1",
-		"items": [
-			{
-				"itemType": "journalArticle",
-				"title": "A framework of coopetitive games: Applications to the Greek crisis",
-				"creators": [
-					{
-						"firstName": "David",
-						"lastName": "Carfì",
-						"creatorType": "author"
-					},
-					{
-						"firstName": "Daniele",
-						"lastName": "Schilirò",
-						"creatorType": "author"
-					}
-				],
-				"date": "2012/06/08",
-				"DOI": "10.1478/AAPP.901A1",
-				"ISSN": "1825-1242",
-				"abstractNote": "In the present work we propose an original analytical model of coopetitive game. We shall apply this analytical model of coopetition (based on normal form game theory) to the Greek crisis, while conceiving this game theory model at a macro level. We construct two realizations of such model, trying to represent possible realistic macro-economic scenarios of the Germany-Greek strategic interaction. We shall suggest - after a deep and complete study of the two samples - feasible transferable utility solutions in a properly coopetitive perspective for the divergent interests which drive the economic policies in the euro area.",
-				"issue": "1",
-				"language": "en",
-				"libraryCatalog": "cab.unime.it",
-				"publicationTitle": "Atti della Accademia Peloritana dei Pericolanti - Classe di Scienze Fisiche, Matematiche e Naturali",
-				"rights": "Copyright (c) 2015 AAPP | Physical, Mathematical, and Natural Sciences",
-				"shortTitle": "A framework of coopetitive games",
-				"url": "http://cab.unime.it/journals/index.php/AAPP/article/view/AAPP.901A1",
-				"volume": "90",
-				"attachments": [
-					{
-						"title": "Full Text PDF",
-						"mimeType": "application/pdf"
-					},
-					{
-						"title": "Snapshot"
-					}
-				],
-				"tags": [
-					"Games and economics",
-					"competition",
-					"cooperation",
-					"coopetition"
-				],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
 	{
 		"type": "web",
 		"url": "http://journals.linguisticsociety.org/elanguage/dad/article/view/362.html",
@@ -183,72 +213,48 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"date": "19/11/2013",
+				"date": "2013-11-21",
 				"DOI": "10.2218/ijdc.v8i2.263",
 				"ISSN": "1746-8256",
 				"abstractNote": "Academic librarians are increasingly engaging in data curation by providing infrastructure (e.g., institutional repositories) and offering services (e.g., data management plan consultations) to support the management of research data on their campuses. Efforts to develop these resources may benefit from a greater understanding of disciplinary differences in research data management needs. After conducting a survey of data management practices and perspectives at our research university, we categorized faculty members into four research domains—arts and humanities, social sciences, medical sciences, and basic sciences—and analyzed variations in their patterns of survey responses. We found statistically significant differences among the four research domains for nearly every survey item, revealing important disciplinary distinctions in data management actions, attitudes, and interest in support services. Serious consideration of both the similarities and dissimilarities among disciplines will help guide academic librarians and other data curation professionals in developing a range of data-management services that can be tailored to the unique needs of different scholarly researchers.",
-				"issue": "2",
 				"language": "en",
 				"libraryCatalog": "www.ijdc.net",
 				"pages": "5-26",
 				"publicationTitle": "International Journal of Digital Curation",
-				"rights": "Copyright for papers and articles published in this journal is retained by the authors, with first publication rights granted to the University of Edinburgh. It is a condition of publication that authors license their paper or article under a  Creative Commons Attribution Licence .",
-				"url": "http://www.ijdc.net/index.php/ijdc/article/view/8.2.5",
+				"rights": "Copyright (c)",
+				"url": "http://www.ijdc.net/index.php/ijdc/article/view/8.2.5/",
 				"volume": "8",
 				"attachments": [
 					{
+						"title": "Snapshot"
+					},
+					{
 						"title": "Full Text PDF",
 						"mimeType": "application/pdf"
-					},
-					{
-						"title": "Snapshot"
-					}
-				],
-				"tags": [],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://acontracorriente.chass.ncsu.edu/index.php/acontracorriente/article/view/174",
-		"items": [
-			{
-				"itemType": "journalArticle",
-				"title": "\"La Huelga de los Conventillos\", Buenos Aires, Nueva Pompeya, 1936. Un aporte a los estudios sobre género y clase",
-				"creators": [
-					{
-						"firstName": "Verónica",
-						"lastName": "Norando",
-						"creatorType": "author"
-					},
-					{
-						"firstName": "Ludmila",
-						"lastName": "Scheinkman",
-						"creatorType": "author"
-					}
-				],
-				"date": "2011",
-				"ISSN": "1548-7083",
-				"abstractNote": "Este trabajo se propone realizar un análisis de las relaciones de género y clase a través de un estudio de caso: la “Huelga de los Conventillos” de la fábrica textil Gratry en 1936, que se extendió por más de tres meses, pasando casi inadvertida, sin embargo, para la investigación histórica. Siendo la textil una rama de industria con una mayoría de mano de obra femenina, el caso de la casa Gratry, donde el 60% de los 800 obreros eran mujeres, aparece como ejemplar para la observación de la actividad de las mujeres en conflicto. En el trabajo se analiza el rol de las trabajadoras en la huelga, su participación política, sus formas de organización y resistencia, haciendo eje en las determinaciones de género y de clase que son abordadas de manera complementaria e interrelacionada, así como el complejo entramado de tensiones y solidaridades que éstas generan. De éste modo, se pretende ahondar en la compleja conformación de una identidad obrera femenina, a la vez que se discute con aquella mirada historiográfica tradicional que ha restado importancia a la participación de la mujer en el conflicto social. Esto se realizará a través de la exploración de una serie de variables: las relaciones inter-género e inter-clase (fundamentalmente el vínculo entre las trabajadoras y la patronal masculina), inter-género e intra-clase (la relación entre trabajadoras y trabajadores), intra-género e inter-clase (los lazos entre las trabajadoras y las vecinas comerciantes del barrio), intra-género e intra-clase (relaciones de solidaridad entre trabajadoras en huelga, y de antagonismo entre huelguistas y “carneras”). Para ello se trabajó un corpus documental que incluye información de tipo cuantitativa (las estadísticas del Boletín Informativo del Departamento Nacional del Trabajo), y cualitativa: periódicos obreros –fundamentalmente El Obrero Textil, órgano gremial de la Unión Obrera Textil, Semanario de la CGT-Independencia (órgano de la Confederación General del Trabajo (CGT)-Independencia) y La Vanguardia (periódico del Partido Socialista), entre otros, y entrevistas orales a vecinas de Nueva Pompeya y familiares de trabajadoras de la fábrica Gratry. Se desarrollará una metodología cuali-cuantitativa para el cruce de estas fuentes.",
-				"issue": "1",
-				"itemID": "AC174",
-				"libraryCatalog": "Open Journal Systems",
-				"pages": "1–37",
-				"publicationTitle": "A Contracorriente",
-				"url": "http://acontracorriente.chass.ncsu.edu/index.php/acontracorriente/article/view/174",
-				"volume": "9",
-				"attachments": [
-					{
-						"title": "Snapshot"
 					}
 				],
 				"tags": [
-					"huelga",
-					"relaciones de género",
-					"trabajadores",
-					"trabajadroras"
+					{
+						"tag": "DCC"
+					},
+					{
+						"tag": "IJDC"
+					},
+					{
+						"tag": "International Journal of Digital Curation"
+					},
+					{
+						"tag": "curation"
+					},
+					{
+						"tag": "digital curation"
+					},
+					{
+						"tag": "digital preservation"
+					},
+					{
+						"tag": "preservation"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -257,7 +263,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://journals.ub.uni-heidelberg.de/index.php/ip/article/view/31976/26301",
+		"url": "https://journals.ub.uni-heidelberg.de/index.php/ip/article/view/31976/26301",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -295,13 +301,15 @@ var testCases = [
 					}
 				],
 				"date": "2016/08/16",
+				"DOI": "10.11588/ip.2016.2.31976",
 				"ISSN": "2297-3249",
+				"abstractNote": "Zwischen dem 7. und 11. März 2016 fand der erste Bibcast, eine Webcast-Serie zu bibliothekarisch relevanten Themen statt. Aus der Idee heraus entstanden, abgelehnten Einreichungen für den Bibliothekskongress ein alternatives Forum zu bieten, hat sich der Bibcast als interessantes, flexibles und innovatives Format herausgestellt, das die Landschaft der Präsenzkonferenzen zukünftig sinnvoll ergänzen kann. In diesem Praxisbeitrag soll über Entstehung und Ablauf berichtet, Mehrwerte und Stolpersteine veranschaulicht und damit zugleich eine Anleitung zur Organisation von Webkonferenzen gegeben werden.",
 				"issue": "2",
 				"language": "de",
 				"libraryCatalog": "journals.ub.uni-heidelberg.de",
 				"publicationTitle": "Informationspraxis",
 				"rights": "Copyright (c) 2016 Daniel Beucke, Arvid Deppe, Tracy Hoffmann, Felix Lohmeier, Christof Rodejohann, Pascal Ngoc Phu Tu",
-				"url": "http://journals.ub.uni-heidelberg.de/index.php/ip/article/view/31976",
+				"url": "https://journals.ub.uni-heidelberg.de/index.php/ip/article/view/31976",
 				"volume": "2",
 				"attachments": [
 					{
@@ -333,11 +341,13 @@ var testCases = [
 					}
 				],
 				"date": "2016/06/23",
+				"DOI": "10.17169/mae.2016.50",
+				"ISSN": "2567-9309",
 				"abstractNote": "This study deals with the question of genre cinema in terms of an aesthetic experience that also accounts for a shared experience. The focus will be on the historical framework that constituted the emotional mobilization of the American public during World War II when newsreels and fictional war films were screened together as part of the staple program in movie theaters. Drawing on existing concepts of cinema and public sphere as well as on a phenomenological theory of spectator engagement this study sets out to propose a definition of the term moviegoing experience. On these grounds a historiographical account of the institutional practice of staple programming shall be explored together with a theoretical conceptualization of the spectator within in the realm of genre cinema.Diese Studie befragt das Genrekino als Modus ästhetischer Erfahrung in Hinblick auf die konkrete geteilten Erfahrung des Kinosaals. Der Fokus liegt auf den historischen Rahmenbedingen der emotionalen Mobilisierung der US-amerikanischen Öffentlichkeit während des Zweiten Weltkriegs und der gemeinsamen Vorführung von Kriegsnachrichten und fiktionalen Kriegsfilmen in Kinoprogrammen. Dabei wird auf Konzepte des Kinos als öffentlichem Raum und auf phänomenologische Theorien der Zuschaueradressierung Bezug genommen und ein integrative Definition der moviegoing experience entworfen. Dadurch ist es möglich, historiographische Schilderungen der institutionalisierten Praktiken der Kinoprogrammierung mit theoretischen Konzeptualisierungen der Zuschauererfahrung und des Genrekinos ins Verhältnis zu setzen.David Gaertner, M.A. is currently writing his dissertation on the cinematic experience of World War II and is a lecturer at the division of Film Studies at Freie Universität Berlin. From 2011 to 2014 he was research associate in the project “Staging images of war as a mediated experience of community“. He is co-editor of the book “Mobilisierung der Sinne. Der Hollywood-Kriegsfilm zwischen Genrekino und Historie” (Berlin 2013). // David Gaertner, M.A. arbeitet an einer Dissertation zur Kinoerfahrung im Zweiten Weltkrieg und lehrt am Seminar für Filmwissenschaft an der Freien Universität Berlin. 2011 bis 2014 war er wissenschaftlicher Mitarbeiter im DFG-Projekt „Inszenierungen des Bildes vom Krieg als Medialität des Gemeinschaftserlebens“. Er ist Mitherausgeber des Sammelbands “Mobilisierung der Sinne. Der Hollywood-Kriegsfilm zwischen Genrekino und Historie” (Berlin 2013).",
 				"issue": "1",
 				"language": "en",
 				"libraryCatalog": "www.mediaesthetics.org",
-				"publicationTitle": "mediaesthetics - Journal of Poetics of Audiovisual Images",
+				"publicationTitle": "mediaesthetics – Journal of Poetics of Audiovisual Images",
 				"rights": "Copyright (c) 2016 David Gaertner",
 				"shortTitle": "World War II in American Movie Theatres from 1942-45",
 				"url": "http://www.mediaesthetics.org/index.php/mae/article/view/50",
@@ -355,7 +365,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://0277.ch/ojs/index.php/cdrs_0277/article/view/101",
+		"url": "https://0277.ch/ojs/index.php/cdrs_0277/article/view/101",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -374,9 +384,10 @@ var testCases = [
 				"issue": "1",
 				"language": "de",
 				"libraryCatalog": "0277.ch",
+				"pages": "11-17",
 				"publicationTitle": "027.7 Zeitschrift für Bibliothekskultur / Journal for Library Culture",
 				"rights": "Copyright (c) 2016 027.7 Zeitschrift für Bibliothekskultur / Journal for Library Culture",
-				"url": "http://0277.ch/ojs/index.php/cdrs_0277/article/view/101",
+				"url": "https://0277.ch/ojs/index.php/cdrs_0277/article/view/101",
 				"volume": "4",
 				"attachments": [
 					{
@@ -413,6 +424,7 @@ var testCases = [
 					}
 				],
 				"date": "2016/07/28",
+				"DOI": "10.17169/fqs-17.3.2477",
 				"ISSN": "1438-5627",
 				"abstractNote": "The application of computer-assisted qualitative data analysis software (CAQDAS) in the field of qualitative sociology is becoming more popular. However, in Polish scientific research, the use of computer software to aid qualitative data analysis is uncommon. Nevertheless, the Polish qualitative research community is turning to CAQDAS software increasingly often. One noticeable result of working with CAQDAS is an increase in methodological awareness, which is reflected in higher accuracy and precision in qualitative data analysis. Our purpose in this article is to describe the qualitative researchers' environment in Poland and to consider the use of computer-assisted qualitative data analysis. In our deliberations, we focus mainly on the social sciences, especially sociology.URN: http://nbn-resolving.de/urn:nbn:de:0114-fqs160344",
 				"issue": "3",
@@ -432,15 +444,33 @@ var testCases = [
 					}
 				],
 				"tags": [
-					"CAQDAS",
-					"Polen",
-					"Polish sociology",
-					"Software",
-					"Soziologie",
-					"computer-assisted qualitative data analysis",
-					"computergestützte Datenanalyse",
-					"qualitative Forschung",
-					"qualitative research"
+					{
+						"tag": "CAQDAS"
+					},
+					{
+						"tag": "Polen"
+					},
+					{
+						"tag": "Polish sociology"
+					},
+					{
+						"tag": "Software"
+					},
+					{
+						"tag": "Soziologie"
+					},
+					{
+						"tag": "computer-assisted qualitative data analysis"
+					},
+					{
+						"tag": "computergestützte Datenanalyse"
+					},
+					{
+						"tag": "qualitative Forschung"
+					},
+					{
+						"tag": "qualitative research"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -449,7 +479,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://heiup.uni-heidelberg.de/journals/index.php/transcultural/article/view/23541",
+		"url": "https://heiup.uni-heidelberg.de/journals/index.php/transcultural/article/view/23541",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -469,11 +499,10 @@ var testCases = [
 				"language": "en",
 				"libraryCatalog": "heiup.uni-heidelberg.de",
 				"pages": "149-186",
-				"publicationTitle": "Transcultural Studies",
+				"publicationTitle": "The Journal of Transcultural Studies",
 				"rights": "Copyright (c) 2016 Samuel Thevoz",
 				"shortTitle": "On the Threshold of the \"Land of Marvels",
-				"url": "http://heiup.uni-heidelberg.de/journals/index.php/transcultural/article/view/23541",
-				"volume": "0",
+				"url": "https://heiup.uni-heidelberg.de/journals/index.php/transcultural/article/view/23541",
 				"attachments": [
 					{
 						"title": "Full Text PDF",
@@ -484,13 +513,27 @@ var testCases = [
 					}
 				],
 				"tags": [
-					"Alexandra David-Neel",
-					"Cultural Globalization",
-					"Himalayan Borderlands",
-					"Modern Buddhism",
-					"Tibetan Buddhism",
-					"Travel Writing",
-					"World Literature"
+					{
+						"tag": "Alexandra David-Neel"
+					},
+					{
+						"tag": "Cultural Globalization"
+					},
+					{
+						"tag": "Himalayan Borderlands"
+					},
+					{
+						"tag": "Modern Buddhism"
+					},
+					{
+						"tag": "Tibetan Buddhism"
+					},
+					{
+						"tag": "Travel Writing"
+					},
+					{
+						"tag": "World Literature"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -538,7 +581,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://journals.ub.uni-heidelberg.de/index.php/miradas/article/view/22445",
+		"url": "https://journals.ub.uni-heidelberg.de/index.php/miradas/article/view/22445",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -554,13 +597,12 @@ var testCases = [
 				"DOI": "10.11588/mira.2015.0.22445",
 				"ISSN": "2363-8087",
 				"abstractNote": "La obra fotográfica del artista puertorriqueño Carlos Ruiz-Valarino plantea un marcado contraste con una de las tradiciones más arraigadas en la historia del arte de esta isla del Caribe, que es la representación de una identidad cultural construida a través de símbolos. Recurriendo a la parodia a través de tres géneros pictóricos, como son el paisaje, el retrato y el objeto (en el marco de la naturaleza muerta), Ruiz-Valarino cuestiona los símbolos que reiteradamente se emplean en la construcción de un concepto tan controvertido como es el de identidad, conversando para ello con la tradición iconográfica de la fotografía antropológica y etnográfica, así como la de la ilustración científica o la caricatura.",
-				"issue": "0",
 				"language": "es",
 				"libraryCatalog": "journals.ub.uni-heidelberg.de",
 				"pages": "36-49",
 				"publicationTitle": "Miradas - Elektronische Zeitschrift für Iberische und Ibero-amerikanische Kunstgeschichte",
-				"rights": "Copyright (c) 2015 Miradas - Elektronische Zeitschrift für Iberische und Ibero-amerikanische Kunstgeschichte",
-				"url": "http://journals.ub.uni-heidelberg.de/index.php/miradas/article/view/22445",
+				"rights": "Copyright (c) 2015",
+				"url": "https://journals.ub.uni-heidelberg.de/index.php/miradas/article/view/22445",
 				"volume": "2",
 				"attachments": [
 					{
@@ -571,13 +613,7 @@ var testCases = [
 						"title": "Snapshot"
 					}
 				],
-				"tags": [
-					"Fotografía",
-					"Puerto Rico",
-					"antropología",
-					"etnografía",
-					"iconografía"
-				],
+				"tags": [],
 				"notes": [],
 				"seeAlso": []
 			}
@@ -598,15 +634,13 @@ var testCases = [
 					}
 				],
 				"date": "2015/05/17",
-				"ISSN": "0342-9635",
 				"abstractNote": "-",
 				"issue": "99",
 				"language": "de",
 				"libraryCatalog": "ojs.ub.uni-konstanz.de",
-				"publicationTitle": "Willkommen bei Bibliothek aktuell",
+				"publicationTitle": "Bibliothek aktuell",
 				"rights": "Copyright (c) 2015 Willkommen bei Bibliothek aktuell",
 				"url": "https://ojs.ub.uni-konstanz.de/ba/article/view/6175",
-				"volume": "0",
 				"attachments": [
 					{
 						"title": "Full Text PDF",
@@ -677,7 +711,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ajol.info/index.php/thrb/article/view/63347",
+		"url": "https://www.ajol.info/index.php/thrb/article/view/63347",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -728,7 +762,7 @@ var testCases = [
 				"libraryCatalog": "www.ajol.info",
 				"publicationTitle": "Tanzania Journal of Health Research",
 				"rights": "Copyright for articles published in this journal is retained by the journal.",
-				"url": "http://www.ajol.info/index.php/thrb/article/view/63347",
+				"url": "https://www.ajol.info/index.php/thrb/article/view/63347",
 				"volume": "13",
 				"attachments": [
 					{
@@ -746,6 +780,186 @@ var testCases = [
 					"malaria",
 					"prevention",
 					"treatment"
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://ejournals.library.vanderbilt.edu/ojs/index.php/ameriquests/article/view/220",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "Open Journal Systems",
+				"creators": [
+					{
+						"firstName": "Earl E.",
+						"lastName": "Fitz",
+						"creatorType": "author"
+					}
+				],
+				"DOI": "10.15695/amqst.v8i1.220",
+				"abstractNote": "Historically, Canadian literature has been chary of entering too far into the new discipline of inter-American literary study.  Rightly concerned about the danger of blurring its identity as a distinctive national literature (one made up, as is well known, of two great strands, the French and the English), Canadian writing has, however, come of age, both nationally and internationally.  One dramatic aspect of this transformation is that we now have mounting evidence that both English and French Canadian writers are actively engaging with the literatures and cultures of their hemispheric neighbors.  By extending the methodologies of Comparative Literature to the inter-American paradigm, Canadian writers, critics, and literary historians are finding ways to maintain their status as members of a unique and under-appreciated national literature while also entering into the kinds of comparative studies that demonstrate their New World ties as well.",
+				"libraryCatalog": "ejournals.library.vanderbilt.edu",
+				"url": "http://ejournals.library.vanderbilt.edu/ojs/index.php/ameriquests/article/view/220",
+				"attachments": [
+					{
+						"title": "Snapshot"
+					}
+				],
+				"tags": [
+					"American studies",
+					"Canadian studies",
+					"american dream",
+					"brazilian studies",
+					"center for the americas",
+					"free trade",
+					"inter-american literature",
+					"latin american studies",
+					"literature and law",
+					"migration",
+					"native american studies",
+					"quebec studies",
+					"storytelling",
+					"vanderbilt"
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://jms.uwinnipeg.ca/index.php/jms/article/view/1369",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "Mennonites in Unexpected Places: Sociologist and Settler in Latin America",
+				"creators": [
+					{
+						"firstName": "Ben",
+						"lastName": "Nobbs-Thiessen",
+						"creatorType": "author"
+					}
+				],
+				"date": "2012-12-18",
+				"ISSN": "08245053",
+				"language": "en",
+				"libraryCatalog": "jms.uwinnipeg.ca",
+				"pages": "203-224",
+				"publicationTitle": "Journal of Mennonite Studies",
+				"rights": "Copyright (c)",
+				"shortTitle": "Mennonites in Unexpected Places",
+				"url": "http://jms.uwinnipeg.ca/index.php/jms/article/view/1369",
+				"volume": "28",
+				"attachments": [
+					{
+						"title": "Snapshot"
+					},
+					{
+						"title": "Full Text PDF",
+						"mimeType": "application/pdf"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://journals.sfu.ca/jmde/index.php/jmde_1/article/view/100/115",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "The Value of Evaluation Standards: A Comparative Assessment",
+				"creators": [
+					{
+						"firstName": "Robert",
+						"lastName": "Picciotto",
+						"creatorType": "author"
+					}
+				],
+				"date": "2005",
+				"ISSN": "1556-8180",
+				"issue": "3",
+				"language": "en",
+				"libraryCatalog": "journals.sfu.ca",
+				"pages": "30-59",
+				"publicationTitle": "Journal of MultiDisciplinary Evaluation",
+				"rights": "Copyright (c)",
+				"shortTitle": "The Value of Evaluation Standards",
+				"url": "http://journals.sfu.ca/jmde/index.php/jmde_1/article/view/100",
+				"volume": "2",
+				"attachments": [
+					{
+						"title": "Full Text PDF",
+						"mimeType": "application/pdf"
+					},
+					{
+						"title": "Snapshot"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://jecs.pl/index.php/jecs/article/view/551",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "PREPARING FUTURE LEADERS OF THEIR RACES -THE POLITICAL FUNCTION OF CHILDREN’S CHARACTERS IN CONTEMPORARY AFRICAN AMERICAN PICTURE-BOOKS",
+				"creators": [
+					{
+						"firstName": "Ewa",
+						"lastName": "Klęczaj-Siara",
+						"creatorType": "author"
+					}
+				],
+				"date": "2019/06/30",
+				"DOI": "10.15503/jecs20191.173.184",
+				"ISSN": "2081-1640",
+				"abstractNote": "Aim. The aim of the article is to analyse the ways African American children’s characters are constructed in selected picture-books and to determine whether they have any impact on the conduct of contemporary black youth facing discrimination in their own lives. It also argues that picture-books are one of the most influential media in the representation of racial problems.Methods. The subjects of the study are picture-books. The analysis pertains to the visual and the verbal narrative of the books, with a special emphasis being placed on the interplay between text and image as well as on the ways the meaning of the books is created. The texts are analysed using a number of existing research methods used for examining the picture-book format. Results. The article shows that the actions of selected children’s characters, whether real or imaginary, may serve as an incentive for contemporary youth to struggle for equal rights and contribute to the process of racial integration on a daily basis.Conclusions. The results can be considered in the process of establishing educational curricula for students from minority groups who need special literature that would empower them to take action and join in the efforts of adult members of their communities.",
+				"issue": "1",
+				"language": "en",
+				"libraryCatalog": "jecs.pl",
+				"pages": "173-184",
+				"publicationTitle": "Journal of Education Culture and Society",
+				"rights": "Copyright (c) 2019 Ewa Klęczaj-Siara",
+				"url": "https://jecs.pl/index.php/jecs/article/view/551",
+				"volume": "10",
+				"attachments": [
+					{
+						"title": "Full Text PDF",
+						"mimeType": "application/pdf"
+					},
+					{
+						"title": "Snapshot"
+					}
+				],
+				"tags": [
+					{
+						"tag": "African American children's literature"
+					},
+					{
+						"tag": "picture-books"
+					},
+					{
+						"tag": "political agents"
+					},
+					{
+						"tag": "racism"
+					},
+					{
+						"tag": "text-image relationships"
+					}
 				],
 				"notes": [],
 				"seeAlso": []

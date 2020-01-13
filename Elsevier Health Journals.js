@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsbv",
-	"lastUpdated": "2016-09-14 05:06:24"
+	"lastUpdated": "2017-06-07 07:00:39"
 }
 
 /*
@@ -33,9 +33,9 @@
 function detectWeb(doc,url) {
 	
 	var footer = doc.getElementById('footer');
-	if(!footer) return;
+	if (!footer) return;
 	var elsevierLink = footer.getElementsByTagName('a')[0];
-	if(!elsevierLink || elsevierLink.textContent.trim() != 'Elsevier') return;
+	if (!elsevierLink || elsevierLink.textContent.trim() != 'Elsevier') return;
 	var xpath='//meta[@name="citation_journal_title"]';
 		
 	if (ZU.xpath(doc, xpath).length > 0) {
@@ -76,8 +76,8 @@ function doWeb(doc,url)
 		ZU.processDocuments(urls, doWeb);
 		});
 	} else {
-		var abstract = ZU.xpathText(doc, '//div[@class="abstract"]/*[self::h3 or (self::p and not(self::p[@class="note"]))]', null, '\n');
-		if (!abstract) abstract = ZU.xpathText(doc, '//div[@class="tContent"]/*[self::h3 or (self::p and not(self::p[@class="note"]))]', null, '\n');
+		var abstract = ZU.xpathText(doc, '//div[@class="abstract"]/div[contains(@class, "content")]/section/*', null, '\n');
+		if (!abstract) abstract = ZU.xpathText(doc, '//div[@class="tContent"]/div[contains(@class, "content")]/section/*', null, '\n');
 		//Z.debug(abstract)
 		var keywords = ZU.xpath(doc, '//div[@class="keywords"]/a');
 		if (keywords.length==0) keywords = ZU.xpath(doc, '//div[@class="tContent"]/p/span[contains(@class, "keyword")]');
@@ -88,7 +88,7 @@ function doWeb(doc,url)
 		translator.setDocument(doc);
 		translator.setHandler('itemDone', function(obj, item) {
 			var m;
-			if(item.publicationTitle && (m = item.publicationTitle.match(/^(.+), (the)$/i) )){
+			if (item.publicationTitle && (m = item.publicationTitle.match(/^(.+), (the)$/i) )){
 				item.publicationTitle = m[2] + ' ' + m[1];
 			}
 			if (item.date) {
@@ -99,7 +99,7 @@ function doWeb(doc,url)
 			if (item.tags.length==0){
 				for (var i in keywords){
 					var kw = keywords[i].textContent.trim();
-					if(kw) item.tags.push(kw);		
+					if (kw) item.tags.push(kw);		
 				}
 			}
 			//remove duplicate PMIDs

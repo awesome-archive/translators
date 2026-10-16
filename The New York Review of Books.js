@@ -1,84 +1,247 @@
 {
 	"translatorID": "4c164cc8-be7b-4d02-bfbf-37a5622dfd56",
 	"label": "The New York Review of Books",
-	"creator": "Simon Kornblith, Avram Lyon",
+	"creator": "Philipp Zumstein",
 	"target": "^https?://www\\.nybooks\\.com/",
-	"minVersion": "1.0.0b3.r1",
+	"minVersion": "6.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
-	"browserSupport": "gcsbv",
-	"lastUpdated": "2014-03-12 21:39:50"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2023-08-03 11:23:30"
 }
 
-/* FW LINE 57:6869c32952b1 */ function flatten(c){var b=new Array();for(var d in c){var e=c[d];if(e instanceof Array){b=b.concat(flatten(e))}else{b.push(e)}}return b}var FW={_scrapers:new Array()};FW._Base=function(){this.callHook=function(b,c,e,a){if(typeof this["hooks"]==="object"){var d=this["hooks"][b];if(typeof d==="function"){d(c,e,a)}}};this.evaluateThing=function(f,e,c){var b=typeof f;if(b==="object"){if(f instanceof Array){var d=this.evaluateThing;var a=f.map(function(g){return d(g,e,c)});return flatten(a)}else{return f.evaluate(e,c)}}else{if(b==="function"){return f(e,c)}else{return f}}}};FW.Scraper=function(a){FW._scrapers.push(new FW._Scraper(a))};FW._Scraper=function(a){for(x in a){this[x]=a[x]}this._singleFieldNames=["abstractNote","applicationNumber","archive","archiveLocation","artworkMedium","artworkSize","assignee","audioFileType","audioRecordingType","billNumber","blogTitle","bookTitle","callNumber","caseName","code","codeNumber","codePages","codeVolume","committee","company","conferenceName","country","court","date","dateDecided","dateEnacted","dictionaryTitle","distributor","docketNumber","documentNumber","DOI","edition","encyclopediaTitle","episodeNumber","extra","filingDate","firstPage","forumTitle","genre","history","institution","interviewMedium","ISBN","ISSN","issue","issueDate","issuingAuthority","journalAbbreviation","label","language","legalStatus","legislativeBody","letterType","libraryCatalog","manuscriptType","mapType","medium","meetingName","nameOfAct","network","number","numberOfVolumes","numPages","pages","patentNumber","place","postType","presentationType","priorityNumbers","proceedingsTitle","programTitle","programmingLanguage","publicLawNumber","publicationTitle","publisher","references","reportNumber","reportType","reporter","reporterVolume","rights","runningTime","scale","section","series","seriesNumber","seriesText","seriesTitle","session","shortTitle","studio","subject","system","thesisType","title","type","university","url","version","videoRecordingType","volume","websiteTitle","websiteType"];this._makeAttachments=function(p,b,g,t){if(g instanceof Array){g.forEach(function(k){this._makeAttachments(p,b,k,t)},this)}else{if(typeof g==="object"){var o=g.urls||g.url;var m=g.types||g.type;var f=g.titles||g.title;var q=g.snapshots||g.snapshot;var j=this.evaluateThing(o,p,b);var n=this.evaluateThing(f,p,b);var s=this.evaluateThing(m,p,b);var d=this.evaluateThing(q,p,b);if(!(j instanceof Array)){j=[j]}for(var l in j){var c=j[l];var h;var e;var r;if(s instanceof Array){h=s[l]}else{h=s}if(n instanceof Array){e=n[l]}else{e=n}if(d instanceof Array){r=d[l]}else{r=d}t.attachments.push({url:c,title:e,type:h,snapshot:r})}}}};if(this.itemTrans!==undefined){this.makeItems=this.itemTrans.makeItems}else{this.makeItems=function(o,b,m,c,l){var q=new Zotero.Item(this.itemType);q.url=b;for(var h in this._singleFieldNames){var n=this._singleFieldNames[h];if(this[n]){var g=this.evaluateThing(this[n],o,b);if(g instanceof Array){q[n]=g[0]}else{q[n]=g}}}var r=["creators","tags"];for(var f in r){var p=r[f];var d=this.evaluateThing(this[p],o,b);if(d){for(var e in d){q[p].push(d[e])}}}this._makeAttachments(o,b,this["attachments"],q);c(q,this,o,b);l([q])}}};FW._Scraper.prototype=new FW._Base;FW.MultiScraper=function(a){FW._scrapers.push(new FW._MultiScraper(a))};FW._MultiScraper=function(a){for(x in a){this[x]=a[x]}this._mkSelectItems=function(e,d){var b=new Object;for(var c in e){b[d[c]]=e[c]}return b};this._selectItems=function(d,c,e){var b=new Array();Zotero.selectItems(this._mkSelectItems(d,c),function(f){for(var g in f){b.push(g)}e(b)})};this._mkAttachments=function(g,d,f){var b=this.evaluateThing(this["attachments"],g,d);var c=new Object();if(b){for(var e in f){c[f[e]]=b[e]}}return c};this._makeChoices=function(f,p,c,d,h){if(f instanceof Array){f.forEach(function(k){this._makeTitlesUrls(k,p,c,d,h)},this)}else{if(typeof f==="object"){var m=f.urls||f.url;var e=f.titles||f.title;var n=this.evaluateThing(m,p,c);var j=this.evaluateThing(e,p,c);var l=(j instanceof Array);if(!(n instanceof Array)){n=[n]}for(var g in n){var b=n[g];var o;if(l){o=j[g]}else{o=j}h.push(b);d.push(o)}}}};this.makeItems=function(j,b,g,c,f){if(this.beforeFilter){var k=this.beforeFilter(j,b);if(k!=b){this.makeItems(j,k,g,c,f);return}}var e=[];var h=[];this._makeChoices(this["choices"],j,b,e,h);var d=this._mkAttachments(j,b,h);this._selectItems(e,h,function(m){if(!m){f([])}else{var l=[];var n=this.itemTrans;Zotero.Utilities.processDocuments(m,function(q){var p=q.documentURI;var o=n;if(o===undefined){o=FW.getScraper(q,p)}if(o===undefined){}else{o.makeItems(q,p,d[p],function(r){l.push(r);c(r,o,q,p)},function(){})}},function(){f(l)})}})}};FW._MultiScraper.prototype=new FW._Base;FW.DelegateTranslator=function(a){return new FW._DelegateTranslator(a)};FW._DelegateTranslator=function(a){for(x in a){this[x]=a[x]}this._translator=Zotero.loadTranslator(this.translatorType);this._translator.setTranslator(this.translatorId);this.makeItems=function(g,d,b,f,c){var e;Zotero.Utilities.HTTP.doGet(d,function(h){this._translator.setHandler("itemDone",function(k,j){e=j;if(b){j.attachments=b}});if(this.preProcess){h=this.preProcess(h)}this._translator.setString(h);this._translator.translate();f(e)},function(){c([e])})}};FW.DelegateTranslator.prototype=new FW._Scraper;FW._StringMagic=function(){this._filters=new Array();this.addFilter=function(a){this._filters.push(a);return this};this.split=function(a){return this.addFilter(function(b){return b.split(a).filter(function(c){return(c!="")})})};this.replace=function(c,b,a){return this.addFilter(function(d){if(d.match(c)){return d.replace(c,b,a)}else{return d}})};this.prepend=function(a){return this.replace(/^/,a)};this.append=function(a){return this.replace(/$/,a)};this.remove=function(b,a){return this.replace(b,"",a)};this.trim=function(){return this.addFilter(function(a){return Zotero.Utilities.trim(a)})};this.trimInternal=function(){return this.addFilter(function(a){return Zotero.Utilities.trimInternal(a)})};this.match=function(a,b){if(!b){b=0}return this.addFilter(function(d){var c=d.match(a);if(c===undefined||c===null){return undefined}else{return c[b]}})};this.cleanAuthor=function(b,a){return this.addFilter(function(c){return Zotero.Utilities.cleanAuthor(c,b,a)})};this.key=function(a){return this.addFilter(function(b){return b[a]})};this.capitalizeTitle=function(){if(arguments.length>0&&arguments[0]==true){return this.addFilter(function(a){return Zotero.Utilities.capitalizeTitle(a,true)})}else{return this.addFilter(function(a){return Zotero.Utilities.capitalizeTitle(a)})}};this.unescapeHTML=function(){return this.addFilter(function(a){return Zotero.Utilities.unescapeHTML(a)})};this.unescape=function(){return this.addFilter(function(a){return unescape(a)})};this._applyFilters=function(c,e){for(i in this._filters){c=flatten(c);c=c.filter(function(a){return((a!==undefined)&&(a!==null))});for(var d=0;d<c.length;d++){try{if((c[d]===undefined)||(c[d]===null)){continue}else{c[d]=this._filters[i](c[d],e)}}catch(b){c[d]=undefined;Zotero.debug("Caught exception "+b+"on filter: "+this._filters[i])}}c=c.filter(function(a){return((a!==undefined)&&(a!==null))})}return flatten(c)}};FW.PageText=function(){return new FW._PageText()};FW._PageText=function(){this._filters=new Array();this.evaluate=function(c){var b=[c.documentElement.innerHTML];b=this._applyFilters(b,c);if(b.length==0){return false}else{return b}}};FW._PageText.prototype=new FW._StringMagic();FW.Url=function(){return new FW._Url()};FW._Url=function(){this._filters=new Array();this.evaluate=function(d,c){var b=[c];b=this._applyFilters(b,d);if(b.length==0){return false}else{return b}}};FW._Url.prototype=new FW._StringMagic();FW.Xpath=function(a){return new FW._Xpath(a)};FW._Xpath=function(a){this._xpath=a;this._filters=new Array();this.text=function(){var b=function(c){if(typeof c==="object"&&c.textContent){return c.textContent}else{return c}};this.addFilter(b);return this};this.sub=function(b){var c=function(f,e){var d=e.evaluate(b,f,null,XPathResult.ANY_TYPE,null);if(d){return d.iterateNext()}else{return undefined}};this.addFilter(c);return this};this.evaluate=function(f){var e=f.evaluate(this._xpath,f,null,XPathResult.ANY_TYPE,null);var d=e.resultType;var c=new Array();if(d==XPathResult.STRING_TYPE){c.push(e.stringValue)}else{if(d==XPathResult.ORDERED_NODE_ITERATOR_TYPE||d==XPathResult.UNORDERED_NODE_ITERATOR_TYPE){var b;while((b=e.iterateNext())){c.push(b)}}}c=this._applyFilters(c,f);if(c.length==0){return false}else{return c}}};FW._Xpath.prototype=new FW._StringMagic();FW.detectWeb=function(e,b){for(var c in FW._scrapers){var d=FW._scrapers[c];var f=d.evaluateThing(d.itemType,e,b);var a=d.evaluateThing(d.detect,e,b);if(a.length>0&&a[0]){return f}}return undefined};FW.getScraper=function(b,a){var c=FW.detectWeb(b,a);return FW._scrapers.filter(function(d){return(d.evaluateThing(d.itemType,b,a)==c)&&(d.evaluateThing(d.detect,b,a))})[0]};FW.doWeb=function(c,a){var b=FW.getScraper(c,a);b.makeItems(c,a,[],function(f,e,g,d){e.callHook("scraperDone",f,g,d);if(!f.title){f.title=""}f.complete()},function(){Zotero.done()});Zotero.wait()};
+/*
+	***** BEGIN LICENSE BLOCK *****
+
+	Copyright © 2017 Philipp Zumstein and contributors
+	
+	This file is part of Zotero.
+
+	Zotero is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Zotero is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+
+	***** END LICENSE BLOCK *****
+*/
+
 
 function detectWeb(doc, url) {
-	//don't stick to Google adsense pages
-	if ( !Zotero.Utilities.xpathText(doc,
-			'//body/*[not(self::iframe) and not(self::script) and not(self::style)]//*[normalize-space(text())]',
-			null, '').trim() ) return null;
-	return FW.detectWeb(doc, url);
+	let path = new URL(url).pathname;
+	if (/^\/articles\//.test(path)) {
+		return "magazineArticle";
+	}
+	if (/^\/(online|daily)\//.test(path)) {
+		return "blogPost";
+	}
+
+	if (/^\/search\//.test(path)) { // search page
+		let searchResultRoot = doc.querySelector("#root");
+		if (searchResultRoot) {
+			Z.monitorDOMChanges(searchResultRoot);
+		}
+	}
+
+	if (getSearchResults(doc, true)) {
+		return "multiple";
+	}
+	return false;
 }
-function doWeb(doc, url) { return FW.doWeb(doc, url); }
- 
-/** Articles */
-FW.Scraper({
-itemType         : 'magazineArticle',
-detect           : FW.Url().match(/\/articles\/archives\//),
-title            : FW.Xpath('//article[@class="article"]/header/h2').text().trim(), 
-creators         : FW.Xpath('//article[@class="article"]//div[@class="author"]').text().cleanAuthor("author"), 
-url		 : FW.Url().remove(/\?.*/),
-attachments      : [
-		{ url : FW.Url().remove(/\?.*/).append("?pagination=false"),
-		  type : "text/html",
-		  title : "NYRB Snapshot"
-		  }], 
-date             : FW.Xpath('//div[@class="details"]/time').text().remove(/Issue/).trim(), 
-abstractNote     : FW.Xpath('//div[contains(@class, "article-reviewed-items")]').text().trimInternal().prepend("Review of: "),
-publicationTitle : "The New York Review of Books",
-ISSN             : "0028-7504"
-});
 
-/** Blog Posts */
-FW.Scraper({
-itemType         : 'blogPost',
-detect           : FW.Url().match(/\/blogs\//),
-title            : FW.Xpath('//article[@class="blog_post"]//h2').text().trim(), 
-creators         : FW.Xpath('//article[@class="blog_post"]//div[@class="author"]').text().cleanAuthor("author"), 
-url		 : FW.Url().remove(/\?.*/),
-attachments      : [
-		{ url : FW.Url().remove(/\?.*/).append("?pagination=false"),
-		  type : "text/html",
-		  title : "NYRB Snapshot"
-		  }], 
-date             : FW.Xpath('//footer/time').text(), 
-blogTitle        : "NYRblog"
-});
- 
-/** Search results */
-FW.MultiScraper({
-itemType        : "multiple",
-detect          :  FW.Url().match(/\/search\/\?(.*)q=./),
-choices : { titles          : FW.Xpath('//table[@class="result-table"]/tbody/tr/td[2]/h3/a').text(),
-urls            : FW.Xpath('//table[@class="result-table"]/tbody/tr/td[2]/h3/a').key('href').text() }
-});
+function getSearchResults(doc, checkOnly) {
+	var items = {};
+	var found = false;
+	var rows = doc.querySelectorAll(".container .row, .sui-result");
+	for (let row of rows) {
+		let href = attr(row, "h4 > a, .sui-result__title-link", "href");
+		let title = ZU.trimInternal(text(row, "h4 > a, .sui-result__title-link"));
+		if (!href || !title) continue;
+		if (checkOnly) return true;
+		found = true;
+		// Do a bit of disambiguition using author names; try this:
+		// https://www.nybooks.com/search?q=star
+		let author = ZU.trimInternal(text(row, "div:first-child"));
+		items[href] = author ? `${title} (${author.slice(0, 40).trim()})` : title;
+	}
+	return found ? items : false;
+}
 
-/** Issue ToC */
-FW.MultiScraper({
-itemType        : "multiple",
-detect          :  FW.Url().match(/\/issues\//),
-choices : { titles          : FW.Xpath('//div[@class="articles_list"]//article//h2/a').text(),
-urls            : FW.Xpath('//div[@class="articles_list"]//article//h2/a').key('href').text() }
-});/** BEGIN TEST CASES **/
+async function doWeb(doc, url) {
+	if (detectWeb(doc, url) == 'multiple') {
+		let items = await Zotero.selectItems(getSearchResults(doc, false));
+		if (!items) return;
+		for (let url of Object.keys(items)) {
+			await scrape(await requestDocument(url));
+		}
+	}
+	else {
+		await scrape(doc, url);
+	}
+}
+
+async function scrape(doc, url = doc.location.href) {
+	var type = detectWeb(doc, url);
+	var translator = Zotero.loadTranslator('web');
+	// Embedded Metadata
+	translator.setTranslator('951c027d-74ac-47d4-a107-9c3069ab7b48');
+
+	// Work around the synchronicity restruction of handler callback;
+	// Do necessary computation involving async function out of the callback.
+	// Date; also useful for retrieving volume and number
+	let dateArray = urlToDateArray(url);
+
+	// Get { volume, issue } from the article's issue page asynchronously
+	let itemStub;
+	if (type === "magazineArticle" && dateArray) {
+		itemStub = await getIssue(dateArray);
+	}
+
+	translator.setHandler('itemDone', function (obj, item) {
+		item.publicationTitle = "The New York Review of Books";
+		Object.assign(item, itemStub); // absorb volume/number info
+
+		if (type == "magazineArticle") {
+			item.ISSN = "0028-7504";
+		}
+
+		if (!item.date && dateArray) {
+			item.date = dateArray.join("-");
+		}
+
+		// Remove noise trailing the "pipe" character
+		let cleanTitle = text(doc, "header.article-header h1");
+		if (!cleanTitle) {
+			cleanTitle = item.title.split("|")[0].trim();
+		}
+		item.title = cleanTitle || item.title;
+
+		// Remove author of editorials
+		if (item.creators && item.creators.length === 1) {
+			let authorString = creatorToString(item.creators[0]);
+			if (authorString.toLowerCase() === "the editors") {
+				item.creators = [];
+			}
+		}
+
+		// Find any translators and fix their type (the EM doesn't mark them as
+		// translators)
+		let authorByline = ZU.trimInternal(text(doc, "header .author"));
+		// Split off any ", translated by ..."
+		let maybeTranslator = authorByline.split(/\btranslat\S+\s+by\s+/i)[1];
+		if (maybeTranslator) {
+			// Iterate over creators and check if the full name appears in the
+			// "translated by ..." part
+			for (let author of item.creators) {
+				let authorString = creatorToString(author);
+				if (maybeTranslator.includes(authorString)) {
+					author.creatorType = "translator";
+				}
+			}
+		}
+
+		// Add reviewed authors (only for "author" authors, not including
+		// works without leading author but having editor/translator)
+		let reviewed = doc.querySelectorAll(".review-items .attribution");
+		for (let bylineElem of reviewed) {
+			let byline = ZU.trimInternal(bylineElem.textContent.trim());
+			for (let author of cleanReviewedByline(byline)) {
+				item.creators.push(ZU.cleanAuthor(author, "reviewedAuthor"));
+			}
+		}
+
+		item.complete();
+	});
+
+	let em = await translator.getTranslatorObject();
+	em.itemType = type;
+	await em.doWeb(doc, url);
+}
+
+// Parse URL path and extract the year, month, and day as array.
+function urlToDateArray(url) {
+	let path = new URL(url).pathname;
+	let m = path.match(/\/(\d{4})\/(\d{1,2})\/(\d{1,2})\//); // yyyy mm dd
+	return m && [m[1], m[2], m[3]];
+}
+
+// Given the date-array of the issue, find the volume and number by requesting
+// the issue's page and parse the metadata. This function is memoized.
+var ISSUE_CACHE = {};
+async function getIssue(dateArray) {
+	let key = dateArray.join("/");
+	if (ISSUE_CACHE[key]) {
+		return ISSUE_CACHE[key];
+	}
+	let issueURL = `https://www.nybooks.com/issues/${key}/`;
+	let issuePageDoc = await requestDocument(issueURL);
+
+	// Use LD-JSON to retrieve the breadcrumb containing volume / issue info
+	let linkedData = text(issuePageDoc, "script[type='application/ld+json']");
+	if (linkedData) {
+		let issueInfo = JSON.parse(linkedData);
+		let breadcrumbs = issueInfo["@graph"].filter(x => x["@type"] === "BreadcrumbList");
+		if (breadcrumbs.length) {
+			breadcrumbs = breadcrumbs[0].itemListElement || [];
+		}
+		for (let bcItem of breadcrumbs) {
+			let m = bcItem.name.match(/^volume (\d+), (?:issue|number) (\d+)/i);
+			if (m) {
+				let result = { volume: m[1], issue: m[2] };
+				ISSUE_CACHE[key] = result;
+				return result;
+			}
+		}
+	}
+	return null;
+}
+
+// Turn creator object to string in "First Last"
+function creatorToString(creator) {
+	return [creator.firstName, creator.lastName].filter(Boolean).join(" ");
+}
+
+// For any single attribution line of the work being reviewed, return the name
+// of authors (excluding translators, editors, etc.)
+function cleanReviewedByline(byline) {
+	let authors = [];
+	let m = byline.match(/^by\s+(.+)/i);
+
+	if (!m) { // complex byline, without first "author"; ignore
+		return authors;
+	}
+
+	byline = m[1]; // remove leading "by"
+	for (let item of byline.split(/(,|\band\b)/)) {
+		item = item.trim();
+		if (item.startsWith("translat")) {
+			break;
+		}
+		if (item && item !== "," && item !== "and") {
+			authors.push(item);
+		}
+	}
+	return authors;
+}
+
+/** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://www.nybooks.com/articles/archives/2011/dec/08/zuccotti-park-what-future/",
+		"url": "https://www.nybooks.com/articles/2011/12/08/zuccotti-park-what-future/",
 		"items": [
 			{
 				"itemType": "magazineArticle",
+				"title": "Zuccotti Park: What Future?",
 				"creators": [
 					{
 						"firstName": "Michael",
@@ -86,37 +249,41 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [],
-				"seeAlso": [],
+				"date": "2011-12-08",
+				"ISSN": "0028-7504",
+				"abstractNote": "For weeks, organizers had demonstrated enormous skill in keeping the occupation going, steadily expanding while outfoxing Mayor Bloomberg in his attempts to evict them. But what end did it serve if their status as ethical defenders of the 99 percent was being damaged? It was, after all, their major asset. The complicated logistics of holding the park (and providing food, clothing, and warmth for a floating army of hundreds) was draining resources and forcing the most talented activists to narrow their focus to matters of mere physical survival.",
+				"issue": "19",
+				"language": "en",
+				"libraryCatalog": "www.nybooks.com",
+				"publicationTitle": "The New York Review of Books",
+				"shortTitle": "Zuccotti Park",
+				"url": "https://www.nybooks.com/articles/2011/12/08/zuccotti-park-what-future/",
+				"volume": "58",
 				"attachments": [
 					{
-						"title": "NYRB Snapshot",
-						"type": "text/html"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
-				"url": "http://www.nybooks.com/articles/archives/2011/dec/08/zuccotti-park-what-future/",
-				"date": "December 8, 2011",
-				"ISSN": "0028-7504",
-				"publicationTitle": "The New York Review of Books",
-				"title": "Zuccotti Park: What Future?",
-				"libraryCatalog": "The New York Review of Books",
-				"accessDate": "CURRENT_TIMESTAMP",
-				"shortTitle": "Zuccotti Park"
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
 	{
 		"type": "web",
-		"url": "http://www.nybooks.com/search/?q=labor+union&origin=magazine",
+		"url": "https://www.nybooks.com/search/?q=labor+union",
+		"defer": true,
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://www.nybooks.com/blogs/nyrblog/2011/nov/16/americas-new-robber-barons/",
+		"url": "https://www.nybooks.com/online/2011/11/16/americas-new-robber-barons/",
 		"items": [
 			{
 				"itemType": "blogPost",
+				"title": "America’s New Robber Barons",
 				"creators": [
 					{
 						"firstName": "Jeff",
@@ -124,29 +291,177 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [],
-				"seeAlso": [],
+				"date": "2011-11-16",
+				"abstractNote": "With early Tuesday’s abrupt evacuation of Zuccotti Park, the City of New York has managed—for the moment—to dislodge protesters from Wall Street. But it will be much harder to turn attention away from the financial excesses of the very rich—the problems that have given Occupy Wall Street such traction. Data on who is in the top 1 percent of earners further reinforces their point. Here's why.  Though the situation is often described as a problem of inequality, this is not quite the real concern. The issue is runaway incomes at the very top—people earning a million and a half dollars or more according to the most recent data. And much of that runaway income comes from financial investments, stock options, and other special financial benefits available to the exceptionally rich—much of which is taxed at very low capital gains rates. Meanwhile, there has been something closer to stagnation for almost everyone else—including even for many people in the top 20 percent of earners.",
+				"blogTitle": "The New York Review of Books",
+				"language": "en",
+				"url": "https://www.nybooks.com/online/2011/11/16/americas-new-robber-barons/",
 				"attachments": [
 					{
-						"url": "http://www.nybooks.com/blogs/nyrblog/2011/nov/16/americas-new-robber-barons/?pagination=false",
-						"title": "NYRB Snapshot",
-						"type": "text/html"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
-				"url": "http://www.nybooks.com/blogs/nyrblog/2011/nov/16/americas-new-robber-barons/",
-				"blogTitle": "NYRblog",
-				"date": "November 16, 2011, 12:25 p.m.",
-				"title": "America’s New Robber Barons",
-				"libraryCatalog": "The New York Review of Books",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
 	{
 		"type": "web",
-		"url": "http://www.nybooks.com/issues/2012/mar/22/",
+		"url": "http://www.nybooks.com/issues/2012/03/22/",
 		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.nybooks.com/articles/1983/12/08/the-second-death-of-peron/",
+		"items": [
+			{
+				"itemType": "magazineArticle",
+				"title": "The Second Death of Perón?",
+				"creators": [
+					{
+						"firstName": "Robert",
+						"lastName": "Cox",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Joseph A.",
+						"lastName": "Page",
+						"creatorType": "reviewedAuthor"
+					},
+					{
+						"firstName": "Lars",
+						"lastName": "Schoultz",
+						"creatorType": "reviewedAuthor"
+					}
+				],
+				"date": "1983-12-08",
+				"ISSN": "0028-7504",
+				"abstractNote": "Perón, Perón, how great you are. My general, how much you're worth! As the chorus of the Peronist marching song \"The Peronist Boys\" suggests, there was",
+				"issue": "19",
+				"language": "en",
+				"libraryCatalog": "www.nybooks.com",
+				"publicationTitle": "The New York Review of Books",
+				"url": "https://www.nybooks.com/articles/1983/12/08/the-second-death-of-peron/",
+				"volume": "30",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.nybooks.com/articles/1983/12/22/double-trouble/",
+		"items": [
+			{
+				"itemType": "magazineArticle",
+				"title": "Double Trouble",
+				"creators": [
+					{
+						"firstName": "David",
+						"lastName": "Bellos",
+						"creatorType": "translator"
+					},
+					{
+						"firstName": "Emmanuel Le Roy",
+						"lastName": "Ladurie",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Natalie Zemon",
+						"lastName": "Davis",
+						"creatorType": "reviewedAuthor"
+					}
+				],
+				"date": "1983-12-22",
+				"ISSN": "0028-7504",
+				"abstractNote": "The biographies of peasants and especially the autobiographies of country people are a longstanding problem. We owe to the habits of Protestant",
+				"issue": "20",
+				"language": "en",
+				"libraryCatalog": "www.nybooks.com",
+				"publicationTitle": "The New York Review of Books",
+				"url": "https://www.nybooks.com/articles/1983/12/22/double-trouble/",
+				"volume": "30",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.nybooks.com/articles/2015/02/05/putins-kleptocracy/",
+		"items": [
+			{
+				"itemType": "magazineArticle",
+				"title": "‘Putin’s Kleptocracy’",
+				"creators": [],
+				"date": "2015-02-05",
+				"ISSN": "0028-7504",
+				"abstractNote": "Lucy Komisar has written to us that she has a statement to make about the article by Anne Applebaum, “How He and His Cronies Stole Russia,” in our",
+				"issue": "2",
+				"language": "en",
+				"libraryCatalog": "www.nybooks.com",
+				"publicationTitle": "The New York Review of Books",
+				"url": "https://www.nybooks.com/articles/2015/02/05/putins-kleptocracy/",
+				"volume": "62",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.nybooks.com/online/2012/12/15/our-moloch/",
+		"items": [
+			{
+				"itemType": "blogPost",
+				"title": "Our Moloch",
+				"creators": [
+					{
+						"firstName": "Garry",
+						"lastName": "Wills",
+						"creatorType": "author"
+					}
+				],
+				"date": "2012-12-15",
+				"abstractNote": "The gun is our Moloch. We sacrifice children to him daily—sometimes, as at Sandy Hook, by directly throwing them into the fire-hose of bullets from our protected private killing machines, sometimes by blighting our children’s lives by the death of a parent, a schoolmate, a teacher, a protector. The gun is not a mere tool, a bit of technology, a political issue, a point of debate. It is an object of reverence.",
+				"blogTitle": "The New York Review of Books",
+				"language": "en",
+				"url": "https://www.nybooks.com/online/2012/12/15/our-moloch/",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
 	}
 ]
 /** END TEST CASES **/

@@ -2,14 +2,14 @@
 	"translatorID": "3dcbb947-f7e3-4bbd-a4e5-717f3701d624",
 	"label": "HeinOnline",
 	"creator": "Frank Bennett",
-	"target": "^https?://(www\\.)?heinonline\\.org/HOL/(?:LuceneSearch|Page|IFLPMetaData)\\?",
+	"target": "^https?://access\\.heinonline\\.com/HOL/(LuceneSearch|Page|IFLPMetaData|AuthorProfile)\\?",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
-	"browserSupport": "gcsbv",
-	"lastUpdated": "2016-08-10 09:29:21"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2026-07-07 15:53:27"
 }
 
 /*
@@ -42,12 +42,12 @@ function getSearchResults(doc) {
 	var results = doc.getElementsByClassName("lucene_search_result_b"),
 		items = {},
 		found = false;
-	for (var i=0, ilen=results.length; i<ilen; i++) {
+	for (var i = 0, ilen = results.length; i < ilen; i++) {
 		var url = getXPathStr("href", results[i], './/a[1]');
 
 		var title = getXPathStr("textContent", results[i], './/a[1]');
 		title = ZU.trimInternal(title);
-		//title = title.replace(/\s*\[[^\]]*\]$/, '');
+		// title = title.replace(/\s*\[[^\]]*\]$/, '');
 
 		if (!title || !url) continue;
 		
@@ -70,7 +70,7 @@ function extractQueryValues(url) {
 	ret.base = url.replace(/[a-zA-Z]+\?.*/, "");
 	var query = url.replace(/.*?\?/, "");
 	query = query.split("&");
-	for (var i=0,ilen=query.length;i<ilen;i++) {
+	for (var i = 0, ilen = query.length; i < ilen; i++) {
 		var pair = query[i].split("=");
 		ret[pair[0]] = pair[1];
 	}
@@ -78,21 +78,25 @@ function extractQueryValues(url) {
 }
 
 // Not all pages have a downloadable PDF
-function translateRIS(ris, pdfURL) {
+async function translateRIS(ris, pdfURL) {
 	var trans = Zotero.loadTranslator('import');
-	trans.setTranslator('32d59d2d-b65a-4da4-b0a3-bdd3cfb979e7');//https://github.com/zotero/translators/blob/master/RIS.js
+	trans.setTranslator('32d59d2d-b65a-4da4-b0a3-bdd3cfb979e7');// https://github.com/zotero/translators/blob/master/RIS.js
 	trans.setString(ris);
 	trans.setHandler('itemDone', function (obj, item) {
 		if (pdfURL) {
 			item.attachments = [{
 				title: "Full Text PDF",
-				url: ""+pdfURL,
+				url: pdfURL,
 				mimeType: "application/pdf"
 			}];
 		}
 		item.complete();
 	});
-	trans.translate();
+	let transObject = await trans.getTranslatorObject();
+	transObject.options.fieldMap = {
+		VO: "volume"
+	};
+	await transObject.doImport();
 }
 
 function translateCOinS(COinS) {
@@ -102,39 +106,61 @@ function translateCOinS(COinS) {
 }
 
 // Build URL for RIS, and for PDF if available
-function scrapePage(doc, url) {
-	var risPopupURL = getXPathStr("href", doc, '//form[@id="pagepicker"]//a[contains(@href, "PrintRequest")][1]');
-	if (risPopupURL) {
-		// If page has RIS, use that
-		var docParams = extractQueryValues(risPopupURL);
-		var risURL = docParams.base 
-			+ "CitationFile?handle=" + docParams.handle 
-			+ "&div=" + docParams.div 
-			+ "&id=" + docParams.id 
-			+ "&base=js";
-		var pdfPageURLs = doc.getElementsByClassName("updatediv");
-		ZU.doGet(risURL, function(ris) {
-			if (pdfPageURLs) {
-				Array.prototype.filter.call(pdfPageURLs, function(pdfPageURL){
-					if (pdfPageURL){
-						// force string instead of object
-						pdfPageURL=""+pdfPageURL;
-						ZU.doGet(pdfPageURL, function(pdfPage) {
-							// Call to pdfPageURL prepares PDF for download via META refresh URL
-							var pdfURL = null;
-							var m = pdfPage.match(/<META.*URL=([^"]+)/);
-							if (m) {
-								pdfURL = m[1];
-							}
-							translateRIS(ris, pdfURL);
-						} , null );
+async function scrapePage(doc, url) {
+	// We need the id= and the handle= of the current target item.
+	// From that, we can build URL for RIS.
+
+	// Check for an RIS popup link in the page.
+	var risLink = doc.querySelector('a[href*="CitationFile?kind=ris"]');
+	if (risLink) {
+		let risURL = new URL(risLink.href);
+		let docURLSearchParams = new URLSearchParams(doc.location.search);
+
+		// Work around id and div parameters being swapped(?) in the link URL
+		// embedded in the page's static HTML
+		if (risURL.searchParams.has('div')
+				&& docURLSearchParams.has('div')
+				&& risURL.searchParams.get('div') !== docURLSearchParams.get('div')
+				&& risURL.searchParams.get('id') === docURLSearchParams.get('div')) {
+			let id = risURL.searchParams.get('id');
+			let div = risURL.searchParams.get('div');
+			risURL.searchParams.set('id', div);
+			risURL.searchParams.set('div', id);
+		}
+
+		let ris = await requestText(risURL.toString());
+
+		let pdfURL = null;
+		// the PDF URL gives us a page that will refresh itself to the PDF.
+		let pdfPageURL = doc.querySelector('[data-original-title*="Download PDF"]')?.href; // Resolve relative to current page
+		if (pdfPageURL) {
+			try {
+				let pdfDoc = await requestDocument(pdfPageURL);
+
+				// Call to pdfPageURL prepares PDF for download via META refresh URL
+				let m = pdfDoc.querySelector('meta[http-equiv="Refresh"]');
+				// Z.debug(pdfPage)
+				// Z.debug(m)
+				if (m) {
+					let refreshURL;
+					let parts = m.getAttribute('content').split(/;\s*url=/);
+					if (parts.length === 2) {
+						refreshURL = parts[1].trim().replace(/^'(.+)'/, '$1');
 					}
-				});
-			} else {
-				translateRIS(ris);
+					else {
+						refreshURL = m.getAttribute('url');
+					}
+					pdfURL = new URL(refreshURL, pdfPageURL).toString();
+					Z.debug('PDF URL ' + pdfURL);
+				}
 			}
-		} , null );
-	} else {
+			catch (e) {
+				Zotero.debug(e);
+			}
+		}
+		await translateRIS(ris, pdfURL);
+	}
+	else {
 		// No RIS available in page, try COinS
 		var COinS = getXPathStr("title", doc, '//span[contains(@class, "Z3988")]');
 		if (COinS) {
@@ -149,34 +175,30 @@ function scrapePage(doc, url) {
 	*********
 */
 
-function detectWeb (doc, url) {
+function detectWeb(doc, url) {
 	var COinS = getXPathStr("title", doc, '//span[contains(@class, "Z3988")]');
 	var RIS = getXPathStr("href", doc, '//form[@id="pagepicker"]//a[contains(@href, "PrintRequest")][1]');
-	if (url.indexOf("/LuceneSearch?") > -1) {
+	if (url.includes("/LuceneSearch?") || url.includes("/AuthorProfile?")) {
 		if (getSearchResults(doc)) {
 			return "multiple";
 		}
-	} else if (COinS || RIS) {
-		return "journalArticle"
+	}
+	else if (COinS || RIS) {
+		return "journalArticle";
 	}
 	return false;
 }
 
-function doWeb (doc,url) {
-	if (detectWeb(doc,url) === "multiple") {
-		Zotero.selectItems(getSearchResults(doc), function (items) {
-
-			if (!items) {
-				return true;
-			}
-			var urls = [];
-			for (var i in items) {
-				urls.push(i);
-			}
-			ZU.processDocuments(urls, scrapePage);
-		});
-	} else {
-		scrapePage(doc);
+async function doWeb(doc, url) {
+	if (detectWeb(doc, url) == 'multiple') {
+		let items = await Zotero.selectItems(getSearchResults(doc, false));
+		if (!items) return;
+		for (let url of Object.keys(items)) {
+			await scrapePage(await requestDocument(url));
+		}
+	}
+	else {
+		await scrapePage(doc, url);
 	}
 }
 
@@ -184,7 +206,7 @@ function doWeb (doc,url) {
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://heinonline.org/HOL/IFLPMetaData?type=article&id=53254&collection=iflp&men_tab=srchresults&set_as_cursor=8",
+		"url": "https://heinonline.org/HOL/IFLPMetaData?type=article&id=53254&collection=iflp&men_tab=srchresults&set_as_cursor=8",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -200,7 +222,7 @@ var testCases = [
 				"libraryCatalog": "HeinOnline",
 				"pages": "38",
 				"publicationTitle": "International Financial Law Review",
-				"url": "http://heinonline.org/HOL/IFLPMetaData?type=article&id=53254&collection=iflp",
+				"url": "https://heinonline.org/HOL/IFLPMetaData?type=article&id=53254&collection=iflp",
 				"volume": "26",
 				"attachments": [],
 				"tags": [],
@@ -211,12 +233,12 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://heinonline.org/HOL/LuceneSearch?terms=test&collection=all&searchtype=advanced&typea=text&tabfrom=&submit=Go&all=true",
+		"url": "https://heinonline.org/HOL/LuceneSearch?terms=test&collection=all&searchtype=advanced&typea=text&tabfrom=&submit=Go&all=true",
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://heinonline.org/HOL/Page?handle=hein.journals/alterlj18&div=22&start_page=76&collection=journals&set_as_cursor=4&men_tab=srchresults",
+		"url": "https://heinonline.org/HOL/Page?handle=hein.journals/alterlj18&div=22&start_page=76&collection=journals&set_as_cursor=4&men_tab=srchresults",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -229,11 +251,13 @@ var testCases = [
 					}
 				],
 				"date": "1993",
+				"issue": "2",
 				"journalAbbreviation": "Alternative L.J.",
 				"language": "eng",
 				"libraryCatalog": "HeinOnline",
 				"pages": "76-85",
 				"publicationTitle": "Alternative Law Journal",
+				"url": "https://heinonline.org/HOL/P?h=hein.journals/alterlj18&i=80",
 				"volume": "18",
 				"attachments": [
 					{
@@ -246,6 +270,11 @@ var testCases = [
 				"seeAlso": []
 			}
 		]
+	},
+	{
+		"type": "web",
+		"url": "https://heinonline.org/HOL/AuthorProfile?action=edit&search_name=de%20Silva%20de%20Alwis%2C%20Rangita&collection=journals",
+		"items": "multiple"
 	}
 ]
 /** END TEST CASES **/

@@ -1,21 +1,21 @@
 {
 	"translatorID": "f16931f0-372e-4197-8927-05d2ba7599d8",
 	"label": "Talis Aspire",
-	"creator": "Sebastian Karcher",
-	"target": "^https?://([^/]+\\.)?(((my)?reading|resource|lib|cyprus|)lists|aspire\\.surrey)\\..+/(lists|items)/",
+	"creator": "Sebastian Karcher and Abe Jellinek",
+	"target": "^https?://([^/]+\\.)?(((my)?reading|resource|lib|cyprus|)lists|aspire\\.surrey|rl\\.talis)\\..+/(lists|items)/",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 270,
 	"inRepository": true,
 	"translatorType": 4,
-	"browserSupport": "gcsbv",
-	"lastUpdated": "2014-09-25 15:51:45"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2021-07-08 16:59:21"
 }
 
 /*
 	***** BEGIN LICENSE BLOCK *****
 	
-	Copyright © 2013 Sebastian Karcher 
+	Copyright © 2013-2021 Sebastian Karcher and Abe Jellinek
 	This file is part of Zotero.
 	
 	Zotero is free software: you can redistribute it and/or modify
@@ -35,70 +35,71 @@
 */
 
 function detectWeb(doc, url) {
-	if (url.indexOf('/lists/') != -1 && getSearchResults(doc, true)) return "multiple";
+	if (url.includes('/lists/') && getSearchResults(doc, true)) return "multiple";
 	
-	if (url.indexOf('/items/') != -1) {
+	if (url.includes('/items/')) {
 		var type = ZU.xpathText(doc, '//dd/span[@class="label"]');
+		if (!type) type = text(doc, 'rl-bibliographic-resource-type');
 		if (type == "Book")	return "book";
-		if (type =="Webpage" || type =="Website") return "webpage";
+		if (type == "Webpage" || type == "Website") return "webpage";
 		return "journalArticle";
 	}
+
+	return false;
 }
 
 function getSearchResults(doc, checkOnly) {
 	var items = {}, found = false;
-	var bibData = doc.getElementsByClassName('itemBibData');
-	for (var i=0; i<bibData.length; i++) {
-		var a = bibData[i].getElementsByTagName('a')[0];
-		if (!a) continue;
-		
+	var bibData = doc.querySelectorAll('article[id]');
+	for (let article of bibData) {
+		let title = text(article, 'cite');
+		let slug = 'items/' + article.id.split('_')[1];
+		if (!title || !slug) continue;
 		if (checkOnly) return true;
 		found = true;
-		items[a.href] = ZU.trimInternal(a.textContent);
+		items[slug] = ZU.trimInternal(title);
 	}
 	
 	return found ? items : false;
 }
 
 function doWeb(doc, url) {
-	if(detectWeb(doc, url) == "multiple") { 
+	if (detectWeb(doc, url) == "multiple") {
 		Zotero.selectItems(getSearchResults(doc), function (items) {
-			if (!items) return true;
-			
-			var articles = [];
-			for (var i in items) {
-				articles.push(i);
-			}
-			scrape(articles)
+			if (!items) return;
+			scrape(url, Object.keys(items));
 		});
-	} else {
-		scrape([url]);
+	}
+	else {
+		scrape(url, [extractSlug(url)]);
 	}
 }
 
-function scrape(urls) {
-	var url = urls.shift();
-	ZU.doGet(url.replace(/\.html.*/, ".ris"), function(text){
+function scrape(url, slugs) {
+	let siteID = url.match(/\/\d+\/([^/]+)/);
+	if (!siteID) siteID = url.match(/([^.]+)\.rl\.talis\.com/);
+	siteID = siteID[1];
+	let urls = slugs.map(slug => `https://${siteID}.rl.talis.com/${slug}.ris`);
+	
+	ZU.doGet(urls, function (text) {
 		var translator = Zotero.loadTranslator("import");
 		// RIS
 		translator.setTranslator("32d59d2d-b65a-4da4-b0a3-bdd3cfb979e7");
 		translator.setString(text);
-		translator.setHandler("itemDone", function(obj, item) {
-			item.attachments = [{
-				url:url,
-				title: "Talis Aspire - Snapshot",
-				mimeType: "text/html"
-			}];
-			item.complete();
-		});	
 		translator.translate();
-	},
-	function() { if (urls.length) scrape(urls) });
-}/** BEGIN TEST CASES **/
+	});
+}
+
+function extractSlug(url) {
+	return (url.match(/([^/]+\/[^/]+)\.html/) || [])[1];
+}
+
+/** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://lists.library.lincoln.ac.uk/items/FEB50B30-652C-55B2-08F8-F2D399BF308A.html",
+		"url": "https://rl.talis.com/3/lincoln/items/FEB50B30-652C-55B2-08F8-F2D399BF308A.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -116,17 +117,13 @@ var testCases = [
 					}
 				],
 				"date": "2006",
-				"ISBN": "0415346665",
+				"ISBN": "9780415346665",
+				"edition": "2nd ed",
 				"libraryCatalog": "Talis Aspire",
 				"place": "London",
 				"publisher": "Routledge",
 				"shortTitle": "American cultural studies",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [
 					{
@@ -140,39 +137,13 @@ var testCases = [
 	{
 		"type": "web",
 		"url": "http://lists.library.lincoln.ac.uk/lists/625177C4-A268-8971-E3C9-ACEA91A83585.html",
+		"defer": true,
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://lists.library.qmul.ac.uk/lists/34B2A243-2CDC-1F73-D096-997F10E49638.html",
-		"items": "multiple"
-	},
-	{
-		"type": "web",
-		"url": "http://lists.library.qmul.ac.uk/items/10CFCD91-2171-A947-8436-2189D8DDE5BC.html",
-		"items": [
-			{
-				"itemType": "webpage",
-				"title": "The Metaphysical Elements of Ethics by Immanuel Kant (1780)",
-				"creators": [],
-				"accessDate": "CURRENT_TIMESTAMP",
-				"libraryCatalog": "Talis Aspire",
-				"url": "http://www.marxists.org/reference/subject/ethics/kant/morals/ch01.htm",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
-				"tags": [],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://lists.library.qmul.ac.uk/items/66C2A847-80C3-8259-46AB-0DB8C0779068.html",
+		"url": "https://rl.talis.com/3/qmul/items/66C2A847-80C3-8259-46AB-0DB8C0779068.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -193,12 +164,7 @@ var testCases = [
 				"shortTitle": "The Struggle against Sweatshops",
 				"url": "http://www.jstor.org/stable/25123831",
 				"volume": "Vol. 66",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -207,7 +173,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://readinglists.bournemouth.ac.uk/items/AF2E5676-6A86-DCDC-FC7B-8CC554EFD9BF.html",
+		"url": "https://rl.talis.com/3/bournemouth/items/AF2E5676-6A86-DCDC-FC7B-8CC554EFD9BF.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -230,17 +197,12 @@ var testCases = [
 					}
 				],
 				"date": "0000 c",
-				"ISBN": "020130998X",
+				"ISBN": "9780201309980",
 				"libraryCatalog": "Talis Aspire",
 				"place": "Harlow",
 				"publisher": "Addison Wesley",
 				"volume": "The Addison-Wesley object technology series",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -249,7 +211,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://resourcelists.coventry.ac.uk/items/1CC2D394-7EDE-8DE5-4FF0-868C1C6E6BE5.html",
+		"url": "https://rl.talis.com/3/coventry/items/1CC2D394-7EDE-8DE5-4FF0-868C1C6E6BE5.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -272,16 +235,11 @@ var testCases = [
 					}
 				],
 				"date": "2005",
-				"ISBN": "0443073848",
+				"ISBN": "9780443073847",
 				"libraryCatalog": "Talis Aspire",
 				"place": "Edinburgh",
 				"publisher": "Elsevier/Churchill Livingstone",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -290,86 +248,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://lists.lib.keele.ac.uk/items/239E38F7-E59C-5121-284A-1520A01AD73D.html",
-		"items": [
-			{
-				"itemType": "bookSection",
-				"title": "The Politics of War Memory and Commemoration",
-				"creators": [
-					{
-						"lastName": "Ashplant",
-						"firstName": "T.G. Dawson, G. & Roper, M.",
-						"creatorType": "author"
-					},
-					{
-						"lastName": "Ashplant",
-						"firstName": "T.G.",
-						"creatorType": "editor"
-					},
-					{
-						"lastName": "Dawson",
-						"firstName": "Graham",
-						"creatorType": "editor"
-					},
-					{
-						"lastName": "Roper",
-						"firstName": "Michael",
-						"creatorType": "editor"
-					}
-				],
-				"date": "2000",
-				"ISBN": "0415242614",
-				"bookTitle": "The politics of war memory and commemorations",
-				"libraryCatalog": "Talis Aspire",
-				"place": "London",
-				"publisher": "Routledge",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
-				"tags": [],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://lists.hope.ac.uk/items/381FA0D7-CD14-2AA6-4ACC-1EDCF0A70B64.html",
-		"items": [
-			{
-				"itemType": "book",
-				"title": "Versailles and after, 1919-33",
-				"creators": [
-					{
-						"lastName": "Henig",
-						"firstName": "Ruth",
-						"creatorType": "author"
-					}
-				],
-				"date": "1995",
-				"ISBN": "0415127106",
-				"libraryCatalog": "Talis Aspire",
-				"place": "London",
-				"publisher": "Routledge",
-				"volume": "Lancaster pamphlets",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
-				"tags": [],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://cypruslists.central-lancashire.ac.uk/items/57E6E313-82BF-0AF6-C0E5-940A3760507C.html",
+		"url": "https://rl.talis.com/3/cyprus_uclan/items/57E6E313-82BF-0AF6-C0E5-940A3760507C.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -388,15 +268,11 @@ var testCases = [
 				],
 				"date": "2010",
 				"ISBN": "9789963935918",
+				"edition": "3rd ed",
 				"libraryCatalog": "Talis Aspire",
 				"place": "Limassol, Cyprus",
 				"publisher": "A. Neocleous & Co. LLC",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -405,7 +281,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://liblists.derby.ac.uk/items/F9F66F67-142C-B05D-7401-22037C676876.html",
+		"url": "https://rl.talis.com/3/derby/items/F9F66F67-142C-B05D-7401-22037C676876.html",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -418,94 +295,19 @@ var testCases = [
 					}
 				],
 				"date": "2012",
-				"ISBN": "0857257730",
+				"ISBN": "9780857257734",
+				"edition": "5th ed",
 				"libraryCatalog": "Talis Aspire",
 				"place": "London",
 				"publisher": "Learning Matters",
 				"shortTitle": "Preparing to teach in the lifelong learning sector",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [
 					{
 						"note": "<p>Earlier editions are available in the Library.</p>"
 					}
 				],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://lancaster.myreadinglists.org/items/3ED977AC-FAFF-5832-77C6-957A3D325268.html",
-		"items": [
-			{
-				"itemType": "book",
-				"title": "Design patterns: elements of reusable object-oriented software",
-				"creators": [
-					{
-						"lastName": "Gamma",
-						"firstName": "Erich",
-						"creatorType": "author"
-					}
-				],
-				"date": "1995",
-				"ISBN": "0201633612",
-				"libraryCatalog": "Talis Aspire",
-				"place": "Reading, Mass",
-				"publisher": "Addison-Wesley",
-				"shortTitle": "Design patterns",
-				"volume": "Addison-Wesley professional computing series",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
-				"tags": [],
-				"notes": [],
-				"seeAlso": []
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://aspire.surrey.ac.uk/items/F6646FBE-5816-9FE7-AAE0-6EE9C05704A5.html",
-		"items": [
-			{
-				"itemType": "book",
-				"title": "Major chemical disasters: medical aspects of managment : proceedings of a meeting arranged by the Section of Occupational Medicine of the Royal Society of Medicine, held in London 21 and 22 February, 1989",
-				"creators": [
-					{
-						"lastName": "Murray",
-						"firstName": "Virginia",
-						"creatorType": "author"
-					},
-					{
-						"lastName": "Royal Society of Medicine",
-						"creatorType": "author",
-						"fieldMode": 1
-					}
-				],
-				"date": "1990",
-				"ISBN": "1853151041",
-				"libraryCatalog": "Talis Aspire",
-				"place": "London",
-				"publisher": "Royal Society of Medicine Services",
-				"shortTitle": "Major chemical disasters",
-				"volume": "International congress and symposium series",
-				"attachments": [
-					{
-						"title": "Talis Aspire - Snapshot",
-						"mimeType": "text/html"
-					}
-				],
-				"tags": [],
-				"notes": [],
 				"seeAlso": []
 			}
 		]

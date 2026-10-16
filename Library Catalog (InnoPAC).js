@@ -2,14 +2,14 @@
 	"translatorID": "4fd6b89b-2316-2dc4-fd87-61a97dd941e8",
 	"label": "Library Catalog (InnoPAC)",
 	"creator": "Simon Kornblith and Michael Berkowitz",
-	"target": "(search~|\\/search\\?|(a|X|t|Y|w)\\?|\\?(searchtype|searchscope)|frameset&FF|record=b[0-9]+(~S[0-9])?|/search/q\\?)",
+	"target": "(search~|/search\\?|(a|X|t|Y|w)\\?|\\?(searchtype|searchscope)|frameset&FF|record=[bi]?[0-9]+(~S[0-9])?|/search/q\\?)",
 	"minVersion": "2.1.9",
 	"maxVersion": "",
 	"priority": 250,
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2014-08-26 04:02:52"
+	"lastUpdated": "2021-08-04 21:15:52"
 }
 
 function detectWeb(doc, url) {
@@ -36,7 +36,7 @@ function detectWeb(doc, url) {
 // Central Michigan University fix
 	var xpath = '//div[@class="bibRecordLink"]';
 	var elmt = doc.evaluate(xpath, doc, null, XPathResult.ANY_TYPE, null).iterateNext();
-	if(elmt) {
+	if (elmt) {
 		return "book";
 	}
 	
@@ -44,7 +44,7 @@ function detectWeb(doc, url) {
 	if (!url.match(/SEARCH=/) && !url.match(/searchargs?=/) && !url.match(/&FF/) && !url.match(/search~S[0-9]/) && !url.match(/\/search\/q\?/) && !url.match(/record=/)) return false;
 	// First, check to see if the URL alone reveals InnoPAC, since some sites don't reveal the MARC button
 	var matchRegexp = new RegExp('^https?://[^/]+/search[^/]*\\??/[^/]+/[^/]+/[^/]+\%2C[^/]+/frameset(.+)$');
-	if(matchRegexp.test(doc.location.href)) {
+	if (matchRegexp.test(doc.location.href)) {
 		if (!url.match("SEARCH") && !url.match("searchtype")) {
 			return "book";
 		}
@@ -60,13 +60,13 @@ function detectWeb(doc, url) {
 				@alt="REGULAR RECORD DISPLAY"]] |\
 				//a[contains(@href, "/marc~")]';
 	elmt = doc.evaluate(xpath, doc, null, XPathResult.ANY_TYPE, null).iterateNext();
-	if(elmt) {
+	if (elmt) {
 		return "book";
 	}
 	// Also, check for links to an item display page
 	var tags = ZU.xpath(doc, '//a[@href]');
-	for(var i=0; i<tags.length; i++) {
-		if(matchRegexp.test(tags[i].href) || tags[i].href.match(/^https?:\/\/([^/]+\/(?:search\??\/|record=?|search%7e\/)|frameset&FF=)/)) {
+	for (var i=0; i<tags.length; i++) {
+		if (matchRegexp.test(tags[i].href) || tags[i].href.match(/^https?:\/\/([^/]+\/(?:search\??\/|record=?|search%7e\/)|frameset&FF=)/)) {
 			return "multiple";
 		}
 	}
@@ -85,7 +85,7 @@ function scrape(marc, newDoc) {
 		var useNodeValue = false;
 	}
 	var elmt;
-	while(elmt = elmts.iterateNext()) {
+	while (elmt = elmts.iterateNext()) {
 		if (useNodeValue) {
 			var text = elmt.nodeValue;
 		} else {
@@ -96,24 +96,24 @@ function scrape(marc, newDoc) {
 		
 		var linee = text.split("\n");
 		for (var i=0; i<linee.length; i++) {
-			if(!linee[i]) {
+			if (!linee[i]) {
 				continue;
 			}
 			
 			linee[i] = linee[i].replace(/[\xA0_\t]/g, " ");
 			var value = linee[i].substr(7);
 			
-			if(linee[i].substr(0, 6) == "      ") {
+			if (linee[i].substr(0, 6) == "      ") {
 				// add this onto previous value
 				tagValue += value;
 			} else {
-				if(linee[i].substr(0, 6) == "LEADER") {
+				if (linee[i].substr(0, 6) == "LEADER") {
 					// trap leader
 					record.leader = value;
 				} else {
-					if(tagValue) {	// finish last tag
+					if (tagValue) {	// finish last tag
 						tagValue = tagValue.replace(/\|(.)/g, marc.subfieldDelimiter+"$1");
-						if(tagValue[0] != marc.subfieldDelimiter) {
+						if (tagValue[0] != marc.subfieldDelimiter) {
 							tagValue = marc.subfieldDelimiter+"a"+tagValue;
 						}
 						
@@ -127,9 +127,9 @@ function scrape(marc, newDoc) {
 				}
 			}
 		}
-		if(tagValue) {
+		if (tagValue) {
 			tagValue = tagValue.replace(/\|(.)/g, marc.subfieldDelimiter+"$1");
-			if(tagValue[0] != marc.subfieldDelimiter) {
+			if (tagValue[0] != marc.subfieldDelimiter) {
 				tagValue = marc.subfieldDelimiter+"a"+tagValue;
 			}
 			
@@ -177,8 +177,8 @@ function doWeb(doc, url) {
 						]\
 					]';
 				newUri = ZU.xpath(doc, xpath);
-				if(!newUri.length) newUri = ZU.xpath(doc, '//a[contains(@href, "/marc~")]');
-				if(!newUri.length) throw new Error("MARC link not found");
+				if (!newUri.length) newUri = ZU.xpath(doc, '//a[contains(@href, "/marc~")]');
+				if (!newUri.length) throw new Error("MARC link not found");
 				
 				newUri = newUri[0].href.replace(/frameset/, "marc");
 			}
@@ -193,29 +193,25 @@ function doWeb(doc, url) {
 			
 			var tableRows = doc.evaluate('//table//tr[@class="browseEntry" or @class="briefCitRow" or td/input[@type="checkbox"] or td[contains(@class,"briefCitRow") or contains(@class,"briefcitCell") or contains(@class,"briefcitDetail")]]',
 										 doc, null, XPathResult.ANY_TYPE, null);
-			if (!tableRows.iterateNext()){
-				//http://lib.ntu.edu.tw/en
-				tableRows = doc.evaluate('//table[@class="briefCitRow"]', doc, null, XPathResult.ANY_TYPE, null);
-			}
 			// Go through table rows
 			var i = 0;
-			while(tableRow = tableRows.iterateNext()) {
+			while (tableRow = tableRows.iterateNext()) {
 				// get link
 				var links = doc.evaluate('.//*[@class="briefcitTitle"]//a', tableRow, null, XPathResult.ANY_TYPE, null);
 				var link = links.iterateNext();
-				if(!link) {
+				if (!link) {
 			
 					var links = doc.evaluate(".//a[@href]", tableRow, null, XPathResult.ANY_TYPE, null);
 					link = links.iterateNext();
 				}
 				
-				if(link) {
-					if(availableItems[link.href]) {
+				if (link) {
+					if (availableItems[link.href]) {
 						continue;
 					}
 					
 					// Go through links
-					while(link) {
+					while (link) {
 						if (link.textContent.trim()) availableItems[link.href] = link.textContent;
 						link = links.iterateNext();
 					}
@@ -258,63 +254,52 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://clues.concordia.ca/search/?searchtype=X&SORT=D&searcharg=history+of+communication",
+		"url": "https://las.sinica.edu.tw/search*eng/a?searchtype=Y&searcharg=test&SORT=D&submit.x=0&submit.y=0",
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://libcat.dartmouth.edu/record=b4054652~S1",
+		"url": "https://science-catalogue.canada.ca/record=3038268~S6",
 		"items": [
 			{
 				"itemType": "book",
+				"title": "Nonparametric statistics: a step-by-step approach",
 				"creators": [
 					{
-						"firstName": "John",
-						"lastName": "Gray",
+						"firstName": "Gregory W.",
+						"lastName": "Corder",
 						"creatorType": "author"
+					},
+					{
+						"firstName": "Dale I.",
+						"lastName": "Foreman",
+						"creatorType": "author"
+					}
+				],
+				"date": "2014",
+				"ISBN": "9781118840313",
+				"callNumber": "QA278.8 C67 2014",
+				"edition": "Second edition",
+				"extra": "OCLC: ocn862066449",
+				"libraryCatalog": "science-catalogue.canada.ca Library Catalog",
+				"numPages": "267",
+				"place": "Hoboken, New Jersey",
+				"publisher": "Wiley",
+				"shortTitle": "Nonparametric statistics",
+				"attachments": [],
+				"tags": [
+					{
+						"tag": "Nonparametric statistics"
 					}
 				],
 				"notes": [
 					{
-						"note": "The death of utopia -- Enlightenment and terror in the twentieth century -- Utopia enters the mainstream -- The Americanization of the apocalypse -- Armed missionaries --Post-apocalypse"
+						"note": "\"This Second Edition presents nonparametric statistical procedures in a clear manner and was specifically written for readers with a background in the social, behavioral, and health sciences. The book continues to follow the sameformat in all chapters to aid in reader comprehension, andeach chapter begins with a general introduction and a listof the chapter's main learning objectives. A nonparametricprocedure is then presented and is followed by context-based examples in a step-by-step fashion. Next, updated SPSS(r) screen captures are used to demonstrate how to perform and how to identify the steps in the various procedures. Finally, the authors identify and briefly describe actual examples of corresponding nonparametric tests from diverse fields. Additional tests including the sign test and the Kolmogorov-Smirnov two sample test have been added in addition to new coverage on statistical power. Data sets and odd-numbered solutions are provided in an appendix, and tables of critical values are also provided for reader reference. The authors have also prepared new supplementary material to aid in reader comprehension, which includes: narrated videos and screen animations with step-by-step instructions on how to followthe tests using SPSS; online decision trees to help users determine the needed type of statistical test; and additional solutions not found within the book. Chapter coverage includes: Nonparametric Statistics: An Introduction; Testing Your Data for Normality; Comparing Two Related Samples: The Wilcoxon Signed Rank Test; Comparing Two Unrelated Samples: The Mann-Whitney U Test; Comparing More Than Two Related Samples: Friedman's Test; Comparing More Than Two Unrelated Samples: Kruskal-Wallis H Test; Comparing Variables of Ordinal or Dichotomous Scales: Spearman Rank-Order, Point-Biserial, and Biserial Correlations; Tests for Nominal Scale Data: Chi-Square Tests; and Test for Randomness: Runs Test\"-- \"The book continues to follow the same format in all chapters to aid in reader comprehension, and each chapter begins with a general introduction and a list of the chapter's main learning objectives\"--"
 					}
 				],
-				"tags": [
-					"Religion and politics",
-					"Utopias",
-					"Revolutions",
-					"Religious aspects",
-					"Conservatism",
-					"Religious aspects",
-					"World politics",
-					"20th century",
-					"World politics",
-					"21st century"
-				],
-				"seeAlso": [],
-				"attachments": [],
-				"ISBN": "9780374105983",
-				"title": "Black mass: apocalyptic religion and the death of utopia",
-				"edition": "1st American ed",
-				"place": "New York",
-				"publisher": "Farrar Straus and Giroux",
-				"date": "2007",
-				"numPages": "242",
-				"callNumber": "BL65.P7 G69 2007",
-				"libraryCatalog": "libcat.dartmouth.edu Library Catalog",
-				"shortTitle": "Black mass"
+				"seeAlso": []
 			}
 		]
-	},
-	{
-		"type": "web",
-		"url": "http://tulips.ntu.edu.tw/search/c?searchtype=Y&searcharg=test&searchscope=5",
-		"items": "multiple"
-	},
-	{
-		"type": "web",
-		"url": "http://las.sinica.edu.tw:1085/search~S0*eng/?searchtype=a&searcharg=%E9%BB%83%E5%8B%97%E5%90%BE&sortdropdown=-&SORT=D&extended=0&SUBMIT=Search&searchlimits=&searchorigarg=aborges",
-		"items": "multiple"
 	}
 ]
 /** END TEST CASES **/

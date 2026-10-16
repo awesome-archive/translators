@@ -28,7 +28,7 @@ function detectWeb(doc, url) {
 function useMeta (doc, newItem, field, zoteroField) {
 	xpath='//meta[@name="' + field + '"]/@content';
 	temp=doc.evaluate(xpath, doc, null, XPathResult.ANY_TYPE, null).iterateNext();
-	if(temp)
+	if (temp)
 	{ 	
 		newItem[zoteroField] =temp.value;     
 	}
@@ -105,7 +105,7 @@ var testCases = [
 				"itemType": "journalArticle",
 				"title": "Brugada Syndrome: Practice Essentials, Background, Pathophysiology",
 				"creators": [],
-				"date": "2016-05-13-12:25",
+				"date": "2017-03-02-12:28",
 				"abstractNote": "Brugada syndrome is a disorder characterized by sudden death associated with one of several ECG patterns characterized by incomplete right bundle-branch block and ST-segment elevations in the anterior precordial leads. See the image below.",
 				"libraryCatalog": "eMedicine",
 				"shortTitle": "Brugada Syndrome",

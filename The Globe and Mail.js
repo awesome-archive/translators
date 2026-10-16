@@ -1,223 +1,241 @@
 {
 	"translatorID": "e0234bcf-bc56-4577-aa94-fe86a27f6fd6",
 	"label": "The Globe and Mail",
-	"creator": "Adam Crymble",
+	"creator": "Sonali Gupta and Abe Jellinek",
 	"target": "^https?://www\\.theglobeandmail\\.com/",
-	"minVersion": "1.0.0b4.r5",
+	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
-	"browserSupport": "g",
-	"lastUpdated": "2015-06-02 21:28:35"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2021-07-14 21:43:14"
 }
+
+/*
+	***** BEGIN LICENSE BLOCK *****
+
+	Copyright © 2017-2021 Sonali Gupta and Abe Jellinek
+	
+	This file is part of Zotero.
+
+	Zotero is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Zotero is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+
+	***** END LICENSE BLOCK *****
+*/
+
 
 function detectWeb(doc, url) {
-	var namespace = doc.documentElement.namespaceURI;
-	var nsResolver = namespace ? function(prefix) {
-		if (prefix == 'x') return namespace; else return null;
-	} : null;
-	
-	var metaTags = new Object();
-	var metaTagHTML = doc.getElementsByTagName("meta");
-	for (var i = 0 ; i < metaTagHTML.length ; i++) {
-		metaTags[metaTagHTML[i].getAttribute("name")] = Zotero.Utilities.cleanTags(metaTagHTML[i].getAttribute("content"));
-		
-	}
-		
-	if (doc.evaluate('//div[@id="header"]/h2/a/img', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {	
-		var printEdition1 = doc.evaluate('//div[@id="header"]/h2/a/img', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().src;
-		if (printEdition1.match("printedition")) {
-			return "newspaperArticle";
-		}
-	}
-		
-	if (doc.evaluate('//p[@id="continueReading"]/strong', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-		var payPerView = doc.evaluate('//p[@id="continueReading"]/strong', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().textContent;
-		if (payPerView == "purchase this article") {
-			return "newspaperArticle";
-		}
-	}
-	
-	if (metaTags["article_id"]) {
-		return "newspaperArticle";
-		
-	} else if (doc.title.match('globeandmail.com: Search')) {
+	if (url.includes("/search/") && getSearchResults(doc, true)) {
 		return "multiple";
-	} 
-	
-	if (doc.evaluate('//ul[@id="utility"]/li[@class="email"]/a', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-		var blogCheck = doc.evaluate('//ul[@id="utility"]/li[@class="email"]/a', doc, nsResolver, XPathResult.ANY_TYPE, null);
-		var blogCheck1 = blogCheck.iterateNext().textContent;
-		if (blogCheck1.match("blog")) { 
-			if (doc.location.href.match("story")) {
-			return "blogPost";
-			}
-		}
 	}
+	else if (ZU.xpathText(doc, '//article')) {
+		return "newspaperArticle";
+	}
+	return false;
 }
 
-//Translator for the Globe and Mail newspaper: code by Adam Crymble 
+function getSearchResults(doc, checkOnly) {
+	var items = {};
+	var found = false;
+	var rows = doc.querySelectorAll('.c-search-results-news a');
+	for (let row of rows) {
+		var href = row.href;
+		var title = ZU.trimInternal(text(row, '.c-card__hed-text'));
+		if (!href || !title) continue;
+		if (checkOnly) return true;
+		found = true;
+		items[href] = title;
+	}
+	return found ? items : false;
+}
 
-function associateMeta (newItem, metaTags, field, zoteroField) {
-	if (metaTags[field]) {
-		newItem[zoteroField] = metaTags[field];
+
+function doWeb(doc, url) {
+	if (detectWeb(doc, url) == "multiple") {
+		Zotero.selectItems(getSearchResults(doc, false), function (items) {
+			if (!items) {
+				return;
+			}
+			ZU.processDocuments(Object.keys(items), scrape);
+		});
+	}
+	else {
+		scrape(doc, url);
 	}
 }
 
 function scrape(doc, url) {
-	var namespace = doc.documentElement.namespaceURI;
-	var nsResolver = namespace ? function(prefix) {
-		if (prefix == 'x') return namespace; else return null;
-	} : null;
+	var translator = Zotero.loadTranslator('web');
+	// Embedded Metadata
+	translator.setTranslator('951c027d-74ac-47d4-a107-9c3069ab7b48');
+	translator.setDocument(doc);
 	
-	if (detectWeb(doc, url) == "blogPost") {
-		var newItem = new Zotero.Item("blogPost");
+	translator.setHandler('itemDone', function (obj, item) {
+		item.place = ZU.capitalizeTitle(text(doc, '.placeline'), true);
 		
-		var title = doc.evaluate('//div[@id="headline"]/h2', doc, nsResolver, XPathResult.ANY_TYPE, null);
-		newItem.title = title.iterateNext().textContent;
-		
-		var blogger = doc.evaluate('//div[@id="author"]/p', doc, nsResolver, XPathResult.ANY_TYPE, null); 
-		var bloggerName = blogger.iterateNext().textContent.replace(/^\s*|\s*$/g, '');
-		var bloggerName1 = bloggerName.split(",");
-		newItem.creators.push(Zotero.Utilities.cleanAuthor(bloggerName1[0], "author"));
-	}
-	var noMetaType = 0;
-	
-	if (detectWeb(doc, url) == "newspaperArticle") {
-		var newItem = new Zotero.Item("newspaperArticle");
-		
-	//checks if the article is from the "Print Edition" which doesn't contain meta data.	
-		if (doc.evaluate('//div[@id="header"]/h2/a/img', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {	
-			var printEdition1 = doc.evaluate('//div[@id="header"]/h2/a/img', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().src;
-			if (printEdition1.match("printedition")) {
-				noMetaType = 1;
-				if (doc.evaluate('//div[@id="author"]/p[@class="article-date"]', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-					newItem.date= doc.evaluate('//div[@id="author"]/p[@class="article-date"]', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().textContent;
-				}
+		if (!item.creators.length) {
+			for (let authorLink of doc.querySelectorAll('a.byline')) {
+				item.creators.push(ZU.cleanAuthor(authorLink.textContent, 'author'));
 			}
 		}
 		
-	//checks if the article is a Pay per view article.	
-		if (doc.evaluate('//p[@id="continueReading"]/strong', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-			var payPerView = doc.evaluate('//p[@id="continueReading"]/strong', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().textContent;
-			if (payPerView == "purchase this article") {
-				noMetaType = 1;
-			}
-		}
-		
-	//format for the "Print Edition" and "Pay per view" articles	
-		if (noMetaType = 1) {
-			noMetaType = 1;
-				if (doc.evaluate('//div[@id="headline"]/h2', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-					newItem.title = doc.evaluate('//div[@id="headline"]/h2', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().textContent;
-				}
-								
-				if (doc.evaluate('//div[@id="author"]/p[@class="byline"]', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext()) {
-					var author = doc.evaluate('//div[@id="author"]/p[@class="byline"]', doc, nsResolver, XPathResult.ANY_TYPE, null).iterateNext().textContent;
-				}
-				noMetaType = 0;
-		}
-		
-		var metaTags = new Object();
-		var tagsContent = new Array();
-		
-	//get data
-		var metaTagHTML = doc.getElementsByTagName("meta");
-		for (var i = 0 ; i < metaTagHTML.length ; i++) {
-			metaTags[metaTagHTML[i].getAttribute("name")] = Zotero.Utilities.cleanTags(metaTagHTML[i].getAttribute("content"));
-		}
-		
-	//author	
-		if (metaTags["byline"]) {
-			var author = metaTags["byline"];
-		}
-		
-	//date	
-		if (metaTags["pubdate"]) {
-			var month = metaTags["pubdate"].substr(4, 2);
-			var day = metaTags["pubdate"].substr(6, 2);
-			var year = metaTags["pubdate"].substr(0, 4);
-			
-			newItem.date = (year + "-" + month + "-"+ day);
-		}
-	
-	//tags	
-		if (metaTags["article_keywords"]) {
-			tagsContent = metaTags["article_keywords"].split("; ");
-		}
-		
-		for (var i = 0; i < tagsContent.length; i++) {
-		     	if (tagsContent[i] != (" ") && tagsContent[i] != ("")) {
-			     	newItem.tags[i] = tagsContent[i];
-		     	}
-	     	}	
-		
-		associateMeta (newItem, metaTags, "headline", "title");
-		associateMeta (newItem, metaTags, "summary", "abstractNote");
-		associateMeta (newItem, metaTags, "desk", "section");	
-		associateMeta (newItem, metaTags, "article_id", "callNumber");
-		associateMeta (newItem, metaTags, "credit", "rights");
-	
-	//rest of author (shared between both newspaperArticle types)
-		if (author) {
-			
-		
-			if (author.substr(0,3).toLowerCase() == "by ") {
-				author= author.substr(3);
-			}
-		
-			var authors = author.toLowerCase().split(" and ");
-			for (var i=0; i<authors.length; i++) {
-				var author = authors[i];
-				var words = author.split(" ");
-				
-				for (var j=0; j<words.length; j++) {
-					if (words[j] != "") {
-						words[j] = words[j][0].toUpperCase() + words[j].substr(1).toLowerCase();
-					}
-				}
-				author = words.join(" ");
-				newItem.creators.push(Zotero.Utilities.cleanAuthor(author, "author"));			
-			}
-		}
-	}	
-	
-	newItem.url = doc.location.href;
-	newItem.complete();
-	
+		item.complete();
+	});
+
+	translator.getTranslatorObject(function (trans) {
+		trans.itemType = "newspaperArticle";
+		// TODO map additional meta tags here, or delete completely
+		trans.addCustomFields({
+			'twitter:description': 'abstractNote'
+		});
+		trans.doWeb(doc, url);
+	});
 }
 
-function doWeb(doc, url) {
-	var namespace = doc.documentElement.namespaceURI;
-	var nsResolver = namespace ? function(prefix) {
-		if (prefix == 'x') return namespace; else return null;
-	} : null;
-	
-	var articles = new Array();
-	
-	if (detectWeb(doc, url) == "multiple") {
-		var items = new Object();
-		var next_title = new Array();
-		
-		var titlesCount = doc.evaluate('count (//h3[@class="storyLink"]/a)', doc, nsResolver, XPathResult.ANY_TYPE, null);
-		var titles = doc.evaluate('//h3[@class="storyLink"]/a', doc, nsResolver, XPathResult.ANY_TYPE, null);		
-		
-		for (i=0; i < titlesCount.numberValue; i++) {
-			next_title = titles.iterateNext();
-			
-			if (next_title.href.match("story")) {
-				items[next_title.href] = next_title.textContent;
+/** BEGIN TEST CASES **/
+var testCases = [
+	{
+		"type": "web",
+		"url": "https://www.theglobeandmail.com/news/toronto/doug-ford-says-hes-not-yet-sure-about-his-political-future/article21428180/",
+		"items": [
+			{
+				"itemType": "newspaperArticle",
+				"title": "Doug Ford to decide provincial Tory leadership run in 'a couple weeks'",
+				"creators": [
+					{
+						"firstName": "Ann",
+						"lastName": "Hui",
+						"creatorType": "author"
+					}
+				],
+				"date": "2014-11-03T16:16:12-0500",
+				"abstractNote": "He says he will decide soon about whether to run for Ontario Tory leadership and does not rule out another attempt at the Toronto mayoralty",
+				"language": "en-CA",
+				"libraryCatalog": "www.theglobeandmail.com",
+				"publicationTitle": "The Globe and Mail",
+				"url": "https://www.theglobeandmail.com/news/toronto/doug-ford-says-hes-not-yet-sure-about-his-political-future/article21428180/",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [
+					{
+						"tag": "Christine Elliott"
+					},
+					{
+						"tag": "Doug Ford"
+					},
+					{
+						"tag": "Jim Flaherty"
+					},
+					{
+						"tag": "John Tory"
+					},
+					{
+						"tag": "Ontario Progressive Conservative"
+					},
+					{
+						"tag": "Rob Ford"
+					},
+					{
+						"tag": "leadership"
+					}
+				],
+				"notes": [],
+				"seeAlso": []
 			}
-		}	
-		
-		items = Zotero.selectItems(items);
-		for (var i in items) {
-			articles.push(i);
-		}
-	} else {
-		articles = [url];
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.theglobeandmail.com/search/?q=nuclear",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.theglobeandmail.com/politics/article-liberals-filibuster-opposition-call-for-inquiry-into-parliamentary/",
+		"items": [
+			{
+				"itemType": "newspaperArticle",
+				"title": "Liberals filibuster opposition call for inquiry into parliamentary funds paid to Trudeau’s close friend",
+				"creators": [
+					{
+						"firstName": "Robert",
+						"lastName": "Fife",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Steven",
+						"lastName": "Chase",
+						"creatorType": "author"
+					}
+				],
+				"date": "2021-07-12T19:52:05-0400",
+				"abstractNote": "Opposition wanted Tom Pitfield, the founder of Data Sciences, to appear before the ethics committee, but Liberal MPs prevented the motion from coming to a vote by talking out the clock",
+				"language": "en-CA",
+				"libraryCatalog": "www.theglobeandmail.com",
+				"place": "Ottawa",
+				"publicationTitle": "The Globe and Mail",
+				"url": "https://www.theglobeandmail.com/politics/article-liberals-filibuster-opposition-call-for-inquiry-into-parliamentary/",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [
+					{
+						"tag": "Liberal"
+					},
+					{
+						"tag": "Michael Barrett"
+					},
+					{
+						"tag": "NDP"
+					},
+					{
+						"tag": "committee"
+					},
+					{
+						"tag": "company"
+					},
+					{
+						"tag": "data"
+					},
+					{
+						"tag": "house"
+					},
+					{
+						"tag": "liberal"
+					},
+					{
+						"tag": "liberals"
+					},
+					{
+						"tag": "mps"
+					},
+					{
+						"tag": "party"
+					}
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
 	}
-	Zotero.Utilities.processDocuments(articles, scrape, function() {Zotero.done();});
-	Zotero.wait();
-}
+]
+/** END TEST CASES **/

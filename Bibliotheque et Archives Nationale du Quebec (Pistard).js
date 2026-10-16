@@ -1,14 +1,14 @@
 {
-	"translatorID":"1eb5eb03-26ab-4015-bd0d-65487734744a",
-	"translatorType":4,
-	"label":"Bibliotheque et Archives Nationale du Quebec (Pistard)",
-	"creator":"Adam Crymble",
-	"target":"http://pistard.banq.qc.ca",
-	"minVersion":"1.0.0b4.r5",
-	"maxVersion":"",
-	"priority":100,
-	"inRepository":true,
-	"lastUpdated":"2008-08-06 17:00:00"
+	"translatorID": "1eb5eb03-26ab-4015-bd0d-65487734744a",
+	"translatorType": 4,
+	"label": "Bibliotheque et Archives Nationale du Quebec (Pistard)",
+	"creator": "Adam Crymble",
+	"target": "^https?://pistard\\.banq\\.qc\\.ca",
+	"minVersion": "1.0.0b4.r5",
+	"maxVersion": "",
+	"priority": 100,
+	"inRepository": true,
+	"lastUpdated": "2008-08-06 17:00:00"
 }
 
 function detectWeb (doc, url) {
@@ -126,8 +126,6 @@ function doWeb(doc, url) {
 		if (prefix == 'x') return namespace; else return null;
 	} : null;
 	
-	var articles = new Array();
-	
 	if (detectWeb(doc, url) == "multiple") {
 		var items = new Object();
 			
@@ -139,13 +137,11 @@ function doWeb(doc, url) {
 				items[next_title.href] = next_title.textContent;
 			}
 		}
-		items = Zotero.selectItems(items);
-		for (var i in items) {
-			articles.push(i);
-		}
-	} else {
-		articles = [url];
+		Zotero.selectItems(items, function (items) {
+			ZU.processDocuments(Object.keys(items), scrape);
+		});
 	}
-	Zotero.Utilities.processDocuments(articles, scrape, function() {Zotero.done();});
-	Zotero.wait();
+	else {
+		scrape(doc, url);
+	}
 }

@@ -5,13 +5,11 @@
 	"target": "",
 	"minVersion": "3.0.9",
 	"maxVersion": "",
-	"priority": 98,
+	"priority": 97,
 	"inRepository": true,
 	"translatorType": 8,
-	"browserSupport": "gcsb",
-	"lastUpdated": "2015-04-14 20:56:41"
+	"lastUpdated": "2023-08-25 05:06:07"
 }
-
 
 function detectSearch(item) {
 	//re-enable once 
@@ -23,9 +21,19 @@ function detectSearch(item) {
 
 
 function doSearch(item) {
-	//Sends an SRU formatted as CQL to the library of Congress asking for marcXML back
-	//http://www.loc.gov/standards/sru/
-	ZU.doGet("http://lx2.loc.gov:210/LCDB?operation=searchRetrieve&version=1.1&query=bath.ISBN=^" + ZU.cleanISBN(item.ISBN) + "&maximumRecords=1", function (text) {
+	// Sends an SRU formatted as CQL to the Library of Congress asking for MARCXML back
+	// https://www.loc.gov/standards/sru/
+	// https://www.loc.gov/z3950/lcserver.html
+	
+	let url;
+	if (item.ISBN) {
+		url = "https://lx2.loc.gov/sru/lcdb?operation=searchRetrieve&version=1.1&query=bath.ISBN=^" + ZU.cleanISBN(item.ISBN) + "&maximumRecords=1";
+	}
+	else if (item.query) {
+		url = "https://lx2.loc.gov/sru/lcdb?operation=searchRetrieve&version=1.1&query=" + encodeURIComponent(item.query) + "&maximumRecords=50";
+	}
+	
+	ZU.doGet(url, function (text) {
 		//Z.debug(text);
 		var translator = Zotero.loadTranslator("import");
 		translator.setTranslator("edd87d07-9194-42f8-b2ad-997c4c7deefd");
@@ -63,13 +71,14 @@ var testCases = [
 				"attachments": [],
 				"libraryCatalog": "Library of Congress ISBN",
 				"place": "Cambridge ; New York",
-				"ISBN": "0521770599",
+				"ISBN": "9780521770590 9780521779241",
 				"title": "The Cambridge companion to Adam Smith",
 				"publisher": "Cambridge University Press",
 				"date": "2006",
 				"numPages": "409",
 				"series": "Cambridge companions to philosophy",
-				"callNumber": "B1545.Z7 C36 2006"
+				"callNumber": "B1545.Z7 C36 2006",
+				"extra": "OCLC: ocm60321422"
 			}
 		]
 	}

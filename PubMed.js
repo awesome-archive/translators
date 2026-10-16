@@ -2,89 +2,89 @@
 	"translatorID": "3d0231ce-fd4b-478c-b1d3-840389e5b68c",
 	"label": "PubMed",
 	"creator": "Philipp Zumstein",
-	"target": "^https?://([^/]+[-.])?(www|preview)[-.]ncbi[-.]nlm[-.]nih[-.]gov[^/]*/(m/)?(books|pubmed|sites/pubmed|sites/entrez|entrez/query\\.fcgi\\?.*db=PubMed|myncbi/browse/collection/?|myncbi/collections/)",
+	"target": "^https?://([^/]+\\.)?(www|preview)\\.ncbi\\.nlm\\.nih\\.gov[^/]*/(m/)?(books|pubmed|labs/pubmed|myncbi|sites/pubmed|sites/entrez|entrez/query\\.fcgi\\?.*db=PubMed|myncbi/browse/collection/?|myncbi/collections/)|^https?://pubmed\\.ncbi\\.nlm\\.nih\\.gov/(\\d|\\?|searches/|clipboard|collections/)",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 12,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2015-09-07 18:20:45"
+	"lastUpdated": "2026-10-07 15:45:06"
 }
 
 /*
-	***** BEGIN LICENSE BLOCK *****
+ 	***** BEGIN LICENSE BLOCK *****
+ 	
+ 	Copyright © 2015 Philipp Zumstein
+ 	
+ 	This file is part of Zotero.
+ 	
+ 	Zotero is free software: you can redistribute it and/or modify
+ 	it under the terms of the GNU Affero General Public License as published by
+ 	the Free Software Foundation, either version 3 of the License, or
+ 	(at your option) any later version.
+ 	
+ 	Zotero is distributed in the hope that it will be useful,
+ 	but WITHOUT ANY WARRANTY; without even the implied warranty of
+ 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ 	GNU Affero General Public License for more details.
+ 	
+ 	You should have received a copy of the GNU Affero General Public License
+ 	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+ 	
+ 	***** END LICENSE BLOCK *****
+ */
+ 
+  
+/** ***************************
+  * General utility functions *
+  *****************************/
 
-	Copyright © 2015 Philipp Zumstein
-
-	This file is part of Zotero.
-
-	Zotero is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Affero General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	Zotero is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-	GNU Affero General Public License for more details.
-
-	You should have received a copy of the GNU Affero General Public License
-	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
-
-	***** END LICENSE BLOCK *****
-*/
-
-
-/*****************************
- * General utility functions *
- *****************************/
-function lookupPMIDs(ids, next) {
-	var newUri = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?" +
-		"db=PubMed&tool=Zotero&retmode=xml&rettype=citation&id="+ids.join(",");
-	Zotero.debug(newUri);
-	Zotero.Utilities.HTTP.doGet(newUri, function(text) {
-		if (text.indexOf('PubmedArticle') == -1 && text.indexOf('PubmedBookArticle') == -1) { // e.g. http://www.ncbi.nlm.nih.gov/pubmed/1477919937
-			throw("No Pubmed Data found - Most likely eutils is temporarily down");
+function lookupPMIDs(ids) {
+	var newUri = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"
+		+ "db=PubMed&tool=Zotero&retmode=xml&rettype=citation&id=" + ids.join(",");
+	// Zotero.debug(newUri);
+	Zotero.Utilities.HTTP.doGet(newUri, function (text) {
+		if (!text.includes('PubmedArticle') && !text.includes('PubmedBookArticle')) { // e.g. http://www.ncbi.nlm.nih.gov/pubmed/1477919937
+			throw new Error("No Pubmed Data found - Most likely eutils is temporarily down");
 		}
 		
-		//call the import translator
+		// call the import translator
 		var translator = Zotero.loadTranslator("import");
 		translator.setTranslator("fcf41bed-0cbc-3704-85c7-8062a0068a7a");
 		translator.setString(text);
 		translator.translate();
-		
 	});
 }
 
 
-/****************************
+/** **************************
  * Web translator functions *
  ****************************/
- //retrieves the UID from an item page. Returns false if there is more than one.
+// retrieves the UID from an item page. Returns false if there is more than one.
 function getUID(doc) {
-	var uid = ZU.xpath(doc, 'html/head/meta[@name="ncbi_uidlist"]/@content');
-	if(!uid.length) {
+	var uid = ZU.xpath(doc, 'html/head/meta[@name="ncbi_uidlist" or @name="ncbi_article_id" or @name="uid"]/@content');
+	if (!uid.length) {
 		uid = ZU.xpath(doc, '//input[@id="absid"]/@value');
 	}
 
-	if(uid.length == 1 && uid[0].textContent.search(/^\d+$/) != -1) {
+	if (uid.length == 1 && uid[0].textContent.search(/^\d+$/) != -1) {
 		return uid[0].textContent;
 	}
-
+	
 	uid = ZU.xpath(doc, 'html/head/link[@media="handheld"]/@href');
-	if(!uid.length) uid = ZU.xpath(doc, 'html/head/link[@rel="canonical"]/@href'); //mobile site
-	if(uid.length == 1) {
+	if (!uid.length) uid = ZU.xpath(doc, 'html/head/link[@rel="canonical"]/@href'); // mobile site
+	if (uid.length == 1) {
 		uid = uid[0].textContent.match(/\/(\d+)(?:\/|$)/);
-		if(uid) return uid[1];
+		if (uid) return uid[1];
 	}
 	
-	//PMID from a bookshelf entry
+	// PMID from a bookshelf entry
 	var maincontent = doc.getElementById('maincontent');
-	if(maincontent) {
+	if (maincontent) {
 		uid = ZU.xpath(maincontent,
 			'.//a[@title="PubMed record of this title" or @title="PubMed record of this page"]');
-		if(uid.length == 1 && uid[0].textContent.search(/^\d+$/) != -1) return uid;
+		if (uid.length == 1 && uid[0].textContent.search(/^\d+$/) != -1) return uid[0].textContent;
 	}
 
 	return false;
@@ -93,8 +93,7 @@ function getUID(doc) {
 // retrieve itemprop elements for scraping books directly from page where UID is not available
 function getBookProps(doc) {
 	var main = doc.getElementById('maincontent');
-	if(!main) return;
-	
+	if (!main) return false;
 	var itemprops = ZU.xpath(main, './/div[@itemtype="http://schema.org/Book"]//*[@itemprop]');
 	return itemprops.length ? itemprops : null;
 }
@@ -112,20 +111,22 @@ var bookRDFaMap = {
 
 function scrapeItemProps(itemprops) {
 	var item = new Zotero.Item('book');
-	for (var i=0; i<itemprops.length; i++) {
+	for (var i = 0; i < itemprops.length; i++) {
 		var value = ZU.trimInternal(itemprops[i].textContent);
 		var field = bookRDFaMap[itemprops[i].getAttribute('itemprop')];
-		if(!field) continue;
+		if (!field) continue;
 		
-		if(field.indexOf('creator/') == 0) {
+		if (field.indexOf('creator/') == 0) {
 			field = field.substr(8);
 			item.creators.push(ZU.cleanAuthor(value, field, false));
-		} else if(field == 'ISBN') {
-			if(!item.ISBN) item.ISBN = '';
+		}
+		else if (field == 'ISBN') {
+			if (!item.ISBN) item.ISBN = '';
 			else item.ISBN += '; ';
 			
 			item.ISBN += value;
-		} else {
+		}
+		else {
 			item[field] = value;
 		}
 	}
@@ -139,161 +140,134 @@ function scrapeItemProps(itemprops) {
  * My Bibliography
  */
 function getSearchResults(doc, checkOnly) {
-	var results = doc.getElementsByClassName('rslt');
-	if (!results.length) {
-		//My Bibliography
-		results = doc.getElementsByClassName('citationListItem');
-	}
-	
-	if (!results.length) return false;
-	
+	var results = doc.querySelectorAll('.rslt, .docsum-wrap, .citation-wrap, citationListItem');
 	var items = {}, found = false;
-	
-	for (var i=0; i<results.length; i++) {
+
+	if (!results.length) return false;
+	for (var i = 0; i < results.length; i++) {
 		var title = ZU.xpathText(results[i], '(.//p[@class="title"]|.//h1)[1]')
-			|| ZU.xpathText(results[i], './div[@class="docsumRightcol"]/a'); //My Bibliography
-		
+			|| ZU.xpathText(results[i], './/a[@class="docsum-title"]')
+			|| ZU.xpathText(results[i], './/div[@class="ncbi-docsum"]/a'); // My Bibliography
+
 		var uid = ZU.xpathText(results[i], './/input[starts-with(@id,"UidCheckBox")]/@value')
-			|| ZU.xpathText(results[i], './div[@class="chkBoxLeftCol"]/input/@refuid') //My Bibliography
-			|| ZU.xpathText(results[i], './/dl[@class="rprtid"]/dd[preceding-sibling::*[1][text()="PMID:"]]');
-		
-		if(!uid) {
+			|| ZU.xpathText(results[i], './/div[contains(@class, "docsum-citation")]//span[@class="docsum-pmid"]')
+			|| ZU.xpathText(results[i], './div[@class="citation"]//input/@pmid') // My Bibliography
+			||			ZU.xpathText(results[i], './/dl[@class="rprtid"]/dd[preceding-sibling::*[1][text()="PMID:"]]');
+
+		if (!uid) {
 			uid = ZU.xpathText(results[i], './/p[@class="title"]/a/@href');
-			if(uid) uid = uid.match(/\/(\d+)/);
-			if(uid) uid = uid[1];
+			if (uid) uid = uid.match(/\/(\d+)/);
+			if (uid) uid = uid[1];
 		}
-		
+
 		if (!uid || !title) continue;
-		
+
 		if (checkOnly) return true;
 		found = true;
-		
-		var checkbox = ZU.xpath(results[i], './/input[@type="checkbox"]')[0];
-		
+
+		// Checkbox is a descendant of the containing .rprt div
+		var checkbox = ZU.xpath(results[i].parentNode, './/input[@type="checkbox"]')[0];
+
 		// Keys must be strings. Otherwise, Chrome sorts numerically instead of by insertion order.
-		items["u"+uid] = {
+		items["u" + uid] = {
 			title: ZU.trimInternal(title),
 			checked: checkbox && checkbox.checked
-		};	
+		};
 	}
-	
 	return found ? items : false;
 }
 
 function detectWeb(doc, url) {
-	if (getSearchResults(doc, true) && url.indexOf("/books/") == -1) {
+	if (getSearchResults(doc, true) && !url.includes("/books/")) {
 		return "multiple";
 	}
 	
-	if(!getUID(doc)) {
-		if(getBookProps(doc)) return 'book';
-		
-		return;
+	if (!getUID(doc)) {
+		if (getBookProps(doc)) return 'book';
+		// if we can't get the UID or the book itemprops, we can't import
+		else return false;
 	}
 	
-	//try to determine if this is a book
-	//"Sections" heading only seems to show up for books
+	// try to determine if this is a book
+	// "Sections" heading only seems to show up for books
 	var maincontent = doc.getElementById('maincontent');
-	if(maincontent && ZU.xpath(maincontent, './/div[@class="sections"]').length)
-	{
+	if (maincontent && ZU.xpath(maincontent, './/div[@class="sections"]').length) {
 		var inBook = ZU.xpath(maincontent, './/div[contains(@class, "aff_inline_book")]').length;
 		return inBook ? "bookSection" : "book";
 	}
+
+	// determine if book or bookSection for PubMed Labs
+	var bookCitation = doc.getElementsByClassName('book-citation');
+	if (bookCitation.length > 0 && ZU.xpath(doc, './/div[@class="affiliations"]')) {
+		// For a bookSection there is the affiliations section of the authors of this
+		// section as well as another affiliation sections for the book authors.
+		var isChapter = doc.querySelectorAll('#full-view-heading div.affiliations').length > 1;
+		return isChapter ? "bookSection" : "book";
+	}
 	
-	
-	//from bookshelf page
+	// from bookshelf page
 	var pdid = ZU.xpathText(doc, 'html/head/meta[@name="ncbi_pdid"]/@content');
-	if(pdid == "book-part") return 'bookSection';
-	if(pdid == "book-toc") return 'book';
+	if (pdid == "book-part") return 'bookSection';
+	if (pdid == "book-toc") return 'book';
 	
 	return "journalArticle";
 }
 
 function doWeb(doc, url) {
 	if (detectWeb(doc, url) == "multiple") {
-		Zotero.selectItems(getSearchResults(doc), function(selectedItems) {
-			if(!selectedItems) return true;
+		Zotero.selectItems(getSearchResults(doc), function (selectedItems) {
+			if (!selectedItems) return;
 
 			var uids = [];
-			for(var i in selectedItems) {
+			for (var i in selectedItems) {
 				uids.push(i.substr(1));
 			}
 			lookupPMIDs(uids);
 		});
-	} else {
-		var uid = getUID(doc), itemprops;
+	}
+	else {
+		var uid = getUID(doc);
 		if (uid) {
 			lookupPMIDs([uid]);
-		} else if(itemprops = getBookProps(doc)) {
-			scrapeItemProps(itemprops);
+		}
+		else {
+			var itemprops = getBookProps(doc);
+			if (itemprops) {
+				scrapeItemProps(itemprops);
+			}
 		}
 	}
-/*
-		} else {
-			// Here, account for some articles and search results using spans for PMID
-			var uids= doc.evaluate('//p[@class="pmid"]', doc,
-					nsResolver, XPathResult.ANY_TYPE, null);
-			var uid = uids.iterateNext();
-			if (!uid) {
-				// Fall back on span 
-				uids = doc.evaluate('//span[@class="pmid"]', doc,
-						nsResolver, XPathResult.ANY_TYPE, null);
-				uid = uids.iterateNext();
-			}
-			if (!uid) {
-				// Fall back on <dl class="rprtid"> 
-				// See http://www.ncbi.nlm.nih.gov/pubmed?term=1173[page]+AND+1995[pdat]+AND+Morton[author]&cmd=detailssearch
-				// Discussed http://forums.zotero.org/discussion/17662
-				uids = doc.evaluate('//dl[@class="rprtid"]/dd[1]', doc,
-						nsResolver, XPathResult.ANY_TYPE, null);
-				uid = uids.iterateNext();
-			}
-			if (uid) {
-				ids.push(uid.textContent.match(/\d+/)[0]);
-				Zotero.debug("Found PMID: " + ids[ids.length - 1]);
-				lookupPMIDs(ids, doc);
-			} else {
-				var uids= doc.evaluate('//meta[@name="ncbi_uidlist"]', doc,
-						nsResolver, XPathResult.ANY_TYPE, null);
-				var uid = uids.iterateNext()["content"].split(' ');
-				if (uid) {
-					ids.push(uid);
-					Zotero.debug("Found PMID: " + ids[ids.length - 1]);
-					lookupPMIDs(ids, doc);
-				}
-			}
-		}
-*/
 }
 
 
-/*******************************
+/** *****************************
  * Search translator functions *
  *******************************/
-//extract PMID from a context object
+// extract PMID from a context object
 function getPMID(co) {
 	var coParts = co.split("&");
-	for (var i=0; i<coParts.length; i++) {
+	for (var i = 0; i < coParts.length; i++) {
 		var part = coParts[i];
-		if(part.substr(0, 7) == "rft_id=") {
-			var value = unescape(part.substr(7));
-			if(value.substr(0, 10) == "info:pmid/") {
+		if (part.substr(0, 7) == "rft_id=") {
+			var value = decodeURIComponent(part.substr(7));
+			if (value.substr(0, 10) == "info:pmid/") {
 				return value.substr(10);
 			}
 		}
 	}
+	return false;
 }
 
 function detectSearch(item) {
-	if(item.contextObject) {
-		if(getPMID(item.contextObject)) {
+	if (item.contextObject) {
+		if (getPMID(item.contextObject)) {
 			return true;
 		}
 	}
 	
-	//supply PMID as a string or array
-	if(item.PMID
-		&& (typeof item.PMID == 'string' || item.PMID.length > 0) )  {
+	// supply PMID as a string or array
+	if (item.PMID
+		&& (typeof item.PMID == 'string' || item.PMID.length > 0)) {
 		return true;
 	}
 	
@@ -302,21 +276,22 @@ function detectSearch(item) {
 
 function doSearch(item) {
 	var pmid;
-	if(item.contextObject) {
+	if (item.contextObject) {
 		pmid = getPMID(item.contextObject);
 	}
-	if(!pmid) pmid = item.PMID;
+	if (!pmid) pmid = item.PMID;
 	
-	if(typeof pmid == "string") pmid = [pmid];
+	if (typeof pmid == "string") pmid = [pmid];
 	
 	lookupPMIDs(pmid);
 }
+
 
 /** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/20729678",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed/20729678",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -333,11 +308,10 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"date": "2010 Sep-Oct",
+				"date": "2010",
 				"DOI": "10.1097/NNE.0b013e3181ed81e4",
 				"ISSN": "1538-9855",
 				"abstractNote": "Zotero is a powerful free personal bibliographic manager (PBM) for writers. Use of a PBM allows the writer to focus on content, rather than the tedious details of formatting citations and references. Zotero 2.0 (http://www.zotero.org) has new features including the ability to synchronize citations with the off-site Zotero server and the ability to collaborate and share with others. An overview on how to use the software and discussion about the strengths and limitations are included.",
-				"extra": "PMID: 20729678",
 				"issue": "5",
 				"journalAbbreviation": "Nurse Educ",
 				"language": "eng",
@@ -346,17 +320,17 @@ var testCases = [
 				"publicationTitle": "Nurse Educator",
 				"shortTitle": "Zotero",
 				"volume": "35",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [
-					"Bibliography as Topic",
-					"Database Management Systems",
-					"Humans"
+					{
+						"tag": "Bibliographies as Topic"
+					},
+					{
+						"tag": "Database Management Systems"
+					},
+					{
+						"tag": "Humans"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -365,12 +339,12 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed?term=zotero",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed?term=zotero",
 		"items": "multiple"
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/20821847",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed/20821847",
 		"items": [
 			{
 				"itemType": "book",
@@ -396,16 +370,10 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Oxford",
 				"publisher": "BIOS Scientific Publishers",
-				"rights": "Copyright © 2001, BIOS Scientific Publishers Limited",
+				"rights": "Copyright © 2001, BIOS Scientific Publishers Limited.",
 				"shortTitle": "Endocrinology",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK22/",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -414,7 +382,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed?term=21249754",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed?term=21249754",
 		"items": [
 			{
 				"itemType": "book",
@@ -449,15 +417,9 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Bethesda (MD)",
 				"publisher": "National Center for Biotechnology Information (US)",
-				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson",
+				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson.",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK1825/",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -466,7 +428,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/?term=11109029",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed/?term=11109029",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -505,44 +467,77 @@ var testCases = [
 				],
 				"date": "2000",
 				"ISSN": "1366-5278",
-				"abstractNote": "BACKGROUND: In the majority of people with familial hypercholesterolaemia (FH) the disorder is caused by a mutation of the low-density lipoprotein receptor gene that impairs its proper function, resulting in very high levels of plasma cholesterol. Such levels result in early and severe atherosclerosis, and hence substantial excess mortality from coronary heart disease. Most people with FH are undiagnosed or only diagnosed after their first coronary event, but early detection and treatment with hydroxymethylglutaryl-coenzyme (HMG CoA) reductase inhibitors (statins) can reduce morbidity and mortality. The prevalence of FH in the UK population is estimated to be 1 in 500, which means that approximately 110,000 people are affected.\nOBJECTIVES: To evaluate whether screening for FH is appropriate. To determine which system of screening is most acceptable and cost-effective. To assess the deleterious psychosocial effects of genetic and clinical screening for an asymptomatic treatable inherited condition. To assess whether the risks of screening outweigh potential benefits.\nMETHODS: DATA SOURCES: Relevant papers were identified through a search of the electronic databases. Additional papers referenced in the search material were identified and collected. Known researchers in the field were contacted and asked to supply information on unpublished or ongoing studies. INCLUSION/EXCLUSION CRITERIA: SCREENING AND TREATMENT: The review included studies of the mortality and morbidity associated with FH, the effectiveness and cost of treatment (ignoring pre-statin therapies in adults), and of the effectiveness or cost of possible screening strategies for FH. PSYCHOSOCIAL EFFECTS OF SCREENING: The search for papers on the psychological and social effects of screening for a treatable inherited condition was limited to the last 5 years because recent developments in genetic testing have changed the nature and implications of such screening tests. Papers focusing on genetic testing for FH and breast cancer were included. Papers relating to the risk of coronary heart disease with similarly modifiable outcome (non-FH) were also included. DATA EXTRACTION AND ASSESSMENT OF VALIDITY: A data assessment tool was designed to assess the quality and validity of the papers which reported primary data for the social and psychological effects of screening. Available guidelines for systematically reviewing papers concentrated on quantitative methods, and were of limited relevance. An algorithm was developed which could be used for both the qualitative and quantitative literature. MODELLING METHODS: A model was constructed to investigate the relative cost and effectiveness of various forms of population screening (universal or opportunistic) and case-finding screening (screening relatives of known FH cases). All strategies involved a two-stage process: first, identifying those people with cholesterol levels sufficiently elevated to be compatible with a diagnosis of FH, and then either making the diagnosis based on clinical signs and a family history of coronary disease or carrying out genetic tests. Cost-effectiveness has been measured in terms of incremental cost per year of life gained.\nRESULTS: MODELLING COST-EFFECTIVENESS: FH is a life-threatening condition with a long presymptomatic state. Diagnostic tests are reasonably reliable and acceptable, and treatment with statins substantially improves prognosis. Therefore, it is appropriate to consider systematic screening for this condition. Case finding amongst relatives of FH cases was the most cost-effective strategy, and universal systematic screening the least cost-effective. However, when targeted at young people (16 year olds) universal screening was also cost-effective. Screening patients admitted to hospital with premature myocardial infarction was also relatively cost-effective. Screening is least cost-effective in men aged over 35 years, because the gains in life expectancy are small. (ABSTRACT TRUNCA",
-				"extra": "PMID: 11109029",
+				"abstractNote": "BACKGROUND: In the majority of people with familial hypercholesterolaemia (FH) the disorder is caused by a mutation of the low-density lipoprotein receptor gene that impairs its proper function, resulting in very high levels of plasma cholesterol. Such levels result in early and severe atherosclerosis, and hence substantial excess mortality from coronary heart disease. Most people with FH are undiagnosed or only diagnosed after their first coronary event, but early detection and treatment with hydroxymethylglutaryl-coenzyme (HMG CoA) reductase inhibitors (statins) can reduce morbidity and mortality. The prevalence of FH in the UK population is estimated to be 1 in 500, which means that approximately 110,000 people are affected.\nOBJECTIVES: To evaluate whether screening for FH is appropriate. To determine which system of screening is most acceptable and cost-effective. To assess the deleterious psychosocial effects of genetic and clinical screening for an asymptomatic treatable inherited condition. To assess whether the risks of screening outweigh potential benefits.\nDATA SOURCES: Relevant papers were identified through a search of the electronic databases. Additional papers referenced in the search material were identified and collected. Known researchers in the field were contacted and asked to supply information on unpublished or ongoing studies. INCLUSION/EXCLUSION CRITERIA: SCREENING AND TREATMENT: The review included studies of the mortality and morbidity associated with FH, the effectiveness and cost of treatment (ignoring pre-statin therapies in adults), and of the effectiveness or cost of possible screening strategies for FH. PSYCHOSOCIAL EFFECTS OF SCREENING: The search for papers on the psychological and social effects of screening for a treatable inherited condition was limited to the last 5 years because recent developments in genetic testing have changed the nature and implications of such screening tests. Papers focusing on genetic testing for FH and breast cancer were included. Papers relating to the risk of coronary heart disease with similarly modifiable outcome (non-FH) were also included. DATA EXTRACTION AND ASSESSMENT OF VALIDITY: A data assessment tool was designed to assess the quality and validity of the papers which reported primary data for the social and psychological effects of screening. Available guidelines for systematically reviewing papers concentrated on quantitative methods, and were of limited relevance. An algorithm was developed which could be used for both the qualitative and quantitative literature. MODELLING METHODS: A model was constructed to investigate the relative cost and effectiveness of various forms of population screening (universal or opportunistic) and case-finding screening (screening relatives of known FH cases). All strategies involved a two-stage process: first, identifying those people with cholesterol levels sufficiently elevated to be compatible with a diagnosis of FH, and then either making the diagnosis based on clinical signs and a family history of coronary disease or carrying out genetic tests. Cost-effectiveness has been measured in terms of incremental cost per year of life gained.\nRESULTS: MODELLING COST-EFFECTIVENESS: FH is a life-threatening condition with a long presymptomatic state. Diagnostic tests are reasonably reliable and acceptable, and treatment with statins substantially improves prognosis. Therefore, it is appropriate to consider systematic screening for this condition. Case finding amongst relatives of FH cases was the most cost-effective strategy, and universal systematic screening the least cost-effective. However, when targeted at young people (16 year olds) universal screening was also cost-effective. Screening patients admitted to hospital with premature myocardial infarction was also relatively cost-effective. Screening is least cost-effective in men aged over 35 years, because the gains in life expectancy are small. (ABSTRACT TRUNCA",
 				"issue": "29",
 				"journalAbbreviation": "Health Technol Assess",
 				"language": "eng",
 				"libraryCatalog": "PubMed",
 				"pages": "1-123",
-				"publicationTitle": "Health Technology Assessment (Winchester, England)",
+				"publicationTitle": "Health Technology Assessment",
 				"shortTitle": "Screening for hypercholesterolaemia versus case finding for familial hypercholesterolaemia",
 				"volume": "4",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [
-					"Adult",
-					"Aged",
-					"Algorithms",
-					"Attitude to Health",
-					"Child",
-					"Cost-Benefit Analysis",
-					"Decision Trees",
-					"Female",
-					"Great Britain",
-					"Humans",
-					"Hyperlipoproteinemia Type II",
-					"Male",
-					"Mass Screening",
-					"Middle Aged",
-					"Models, Econometric",
-					"Morbidity",
-					"Needs Assessment",
-					"Practice Guidelines as Topic",
-					"Research Design",
-					"Technology Assessment, Biomedical"
+					{
+						"tag": "Adult"
+					},
+					{
+						"tag": "Aged"
+					},
+					{
+						"tag": "Algorithms"
+					},
+					{
+						"tag": "Attitude to Health"
+					},
+					{
+						"tag": "Child"
+					},
+					{
+						"tag": "Cost-Benefit Analysis"
+					},
+					{
+						"tag": "Decision Trees"
+					},
+					{
+						"tag": "Female"
+					},
+					{
+						"tag": "Humans"
+					},
+					{
+						"tag": "Hyperlipoproteinemia Type II"
+					},
+					{
+						"tag": "Male"
+					},
+					{
+						"tag": "Mass Screening"
+					},
+					{
+						"tag": "Middle Aged"
+					},
+					{
+						"tag": "Models, Econometric"
+					},
+					{
+						"tag": "Morbidity"
+					},
+					{
+						"tag": "Needs Assessment"
+					},
+					{
+						"tag": "Practice Guidelines as Topic"
+					},
+					{
+						"tag": "Research Design"
+					},
+					{
+						"tag": "Technology Assessment, Biomedical"
+					},
+					{
+						"tag": "United Kingdom"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -551,7 +546,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/21249758",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed/21249758",
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -592,14 +587,9 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Bethesda (MD)",
 				"publisher": "National Center for Biotechnology Information (US)",
-				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson",
+				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson.",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK26374/",
 				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					},
 					{
 						"title": "Printable HTML",
 						"mimeType": "text/html",
@@ -614,7 +604,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/books/NBK26374/",
+		"url": "https://www.ncbi.nlm.nih.gov/books/NBK26374/",
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -655,14 +645,9 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Bethesda (MD)",
 				"publisher": "National Center for Biotechnology Information (US)",
-				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson",
+				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson.",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK26374/",
 				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					},
 					{
 						"title": "Printable HTML",
 						"mimeType": "text/html",
@@ -677,7 +662,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/books/NBK1825/",
+		"url": "https://www.ncbi.nlm.nih.gov/books/NBK1825/",
 		"items": [
 			{
 				"itemType": "book",
@@ -712,15 +697,9 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Bethesda (MD)",
 				"publisher": "National Center for Biotechnology Information (US)",
-				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson",
+				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson.",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK1825/",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [],
 				"notes": [],
 				"seeAlso": []
@@ -729,7 +708,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/21249755",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed/21249755",
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -792,7 +771,6 @@ var testCases = [
 					}
 				],
 				"date": "2009",
-				"abstractNote": "PJS is a rare disease. (“Peutz-Jeghers syndrome is no frequent nosological unit”. (1)) There are no high-quality estimates of the prevalence or incidence of PJS. Estimates have included 1 in 8,500 to 23,000 live births (2), 1 in 50,000 to 1 in 100,000 in Finland (3), and 1 in 200,000 (4). A report on the incidence of PJS is available at www.peutz-jeghers.com. At Mayo Clinic from 1945 to 1996 the incidence of PJS was 0.9 PJS patients per 100,000 patients. PJS has been reported in Western Europeans (5), African Americans (5), Nigerians (6), Japanese (7), Chinese (8, 9), Indians (10, 11), and other populations (12-15). PJS occurs equally in males and females (7).",
 				"bookTitle": "Cancer Syndromes",
 				"callNumber": "NBK1826",
 				"extra": "PMID: 21249755",
@@ -800,14 +778,8 @@ var testCases = [
 				"libraryCatalog": "PubMed",
 				"place": "Bethesda (MD)",
 				"publisher": "National Center for Biotechnology Information (US)",
-				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson",
 				"url": "http://www.ncbi.nlm.nih.gov/books/NBK1826/",
 				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					},
 					{
 						"title": "Printable HTML",
 						"mimeType": "text/html",
@@ -822,12 +794,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/myncbi/browse/collection/40383442/?sort=&direction=",
-		"items": "multiple"
-	},
-	{
-		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/20981092",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/20981092/",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -879,11 +846,10 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"date": "Oct 28, 2010",
+				"date": "2010-10-28",
 				"DOI": "10.1038/nature09534",
 				"ISSN": "1476-4687",
 				"abstractNote": "The 1000 Genomes Project aims to provide a deep characterization of human genome sequence variation as a foundation for investigating the relationship between genotype and phenotype. Here we present results of the pilot phase of the project, designed to develop and compare different strategies for genome-wide sequencing with high-throughput platforms. We undertook three projects: low-coverage whole-genome sequencing of 179 individuals from four populations; high-coverage sequencing of two mother-father-child trios; and exon-targeted sequencing of 697 individuals from seven populations. We describe the location, allele frequency and local haplotype structure of approximately 15 million single nucleotide polymorphisms, 1 million short insertions and deletions, and 20,000 structural variants, most of which were previously undescribed. We show that, because we have catalogued the vast majority of common variation, over 95% of the currently accessible variants found in any individual are present in this data set. On average, each person is found to carry approximately 250 to 300 loss-of-function variants in annotated genes and 50 to 100 variants previously implicated in inherited disorders. We demonstrate how these results can be used to inform association and functional studies. From the two trios, we directly estimate the rate of de novo germline base substitution mutations to be approximately 10(-8) per base pair per generation. We explore the data with regard to signatures of natural selection, and identify a marked reduction of genetic variation in the neighbourhood of genes, due to selection at linked sites. These methods and public data will support the next phase of human genetic research.",
-				"extra": "PMID: 20981092 \nPMCID: PMC3042601",
 				"issue": "7319",
 				"journalAbbreviation": "Nature",
 				"language": "eng",
@@ -891,39 +857,83 @@ var testCases = [
 				"pages": "1061-1073",
 				"publicationTitle": "Nature",
 				"volume": "467",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [
-					"Calibration",
-					"Chromosomes, Human, Y",
-					"Computational Biology",
-					"DNA Mutational Analysis",
-					"DNA, Mitochondrial",
-					"Evolution, Molecular",
-					"Female",
-					"Genetic Association Studies",
-					"Genetic Variation",
-					"Genetics, Population",
-					"Genome, Human",
-					"Genome-Wide Association Study",
-					"Genomics",
-					"Genotype",
-					"Haplotypes",
-					"Humans",
-					"Male",
-					"Mutation",
-					"Pilot Projects",
-					"Polymorphism, Single Nucleotide",
-					"Recombination, Genetic",
-					"Sample Size",
-					"Selection, Genetic",
-					"Sequence Alignment",
-					"Sequence Analysis, DNA"
+					{
+						"tag": "Calibration"
+					},
+					{
+						"tag": "Chromosomes, Human, Y"
+					},
+					{
+						"tag": "Computational Biology"
+					},
+					{
+						"tag": "DNA Mutational Analysis"
+					},
+					{
+						"tag": "DNA, Mitochondrial"
+					},
+					{
+						"tag": "Evolution, Molecular"
+					},
+					{
+						"tag": "Female"
+					},
+					{
+						"tag": "Genetic Association Studies"
+					},
+					{
+						"tag": "Genetic Variation"
+					},
+					{
+						"tag": "Genetics, Population"
+					},
+					{
+						"tag": "Genome, Human"
+					},
+					{
+						"tag": "Genome-Wide Association Study"
+					},
+					{
+						"tag": "Genomics"
+					},
+					{
+						"tag": "Genotype"
+					},
+					{
+						"tag": "Haplotypes"
+					},
+					{
+						"tag": "Humans"
+					},
+					{
+						"tag": "Male"
+					},
+					{
+						"tag": "Mutation"
+					},
+					{
+						"tag": "Pilot Projects"
+					},
+					{
+						"tag": "Polymorphism, Single Nucleotide"
+					},
+					{
+						"tag": "Recombination, Genetic"
+					},
+					{
+						"tag": "Sample Size"
+					},
+					{
+						"tag": "Selection, Genetic"
+					},
+					{
+						"tag": "Sequence Alignment"
+					},
+					{
+						"tag": "Sequence Analysis, DNA"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -932,7 +942,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/books/NBK21054/",
+		"url": "https://www.ncbi.nlm.nih.gov/books/NBK21054/",
 		"items": [
 			{
 				"itemType": "book",
@@ -984,7 +994,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://www.ncbi.nlm.nih.gov/pubmed/14779137",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/14779137/",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -996,9 +1006,8 @@ var testCases = [
 						"creatorType": "author"
 					}
 				],
-				"date": "Oct 1950",
+				"date": "1950-10",
 				"ISSN": "0025-7044",
-				"extra": "PMID: 14779137",
 				"issue": "4",
 				"journalAbbreviation": "J Med Assoc State Ala",
 				"language": "eng",
@@ -1006,15 +1015,17 @@ var testCases = [
 				"pages": "118-128",
 				"publicationTitle": "Journal of the Medical Association of the State of Alabama",
 				"volume": "20",
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
+				"attachments": [],
 				"tags": [
-					"Pancreatitis"
+					{
+						"tag": "Humans"
+					},
+					{
+						"tag": "PANCREATITIS"
+					},
+					{
+						"tag": "Pancreatitis"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -1022,106 +1033,244 @@ var testCases = [
 		]
 	},
 	{
-		"type": "search",
-		"input": {
-			"PMID": "20729678"
-		},
+		"type": "web",
+		"url": "https://www.ncbi.nlm.nih.gov/labs/pubmed?term=zotero",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.ncbi.nlm.nih.gov/pubmed?term=21249754",
 		"items": [
 			{
-				"itemType": "journalArticle",
+				"itemType": "book",
+				"title": "Cancer Syndromes",
 				"creators": [
 					{
-						"creatorType": "author",
-						"lastName": "Coar",
-						"firstName": "Jaekea T."
+						"firstName": "Douglas L.",
+						"lastName": "Riegert-Johnson",
+						"creatorType": "editor"
 					},
 					{
-						"creatorType": "author",
-						"lastName": "Sewell",
-						"firstName": "Jeanne P."
-					}
-				],
-				"notes": [],
-				"tags": [
-					"Bibliography as Topic",
-					"Database Management Systems",
-					"Humans"
-				],
-				"seeAlso": [],
-				"attachments": [
+						"firstName": "Lisa A.",
+						"lastName": "Boardman",
+						"creatorType": "editor"
+					},
 					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
+						"firstName": "Timothy",
+						"lastName": "Hefferon",
+						"creatorType": "editor"
+					},
+					{
+						"firstName": "Maegan",
+						"lastName": "Roberts",
+						"creatorType": "editor"
 					}
 				],
-				"ISSN": "1538-9855",
-				"journalAbbreviation": "Nurse Educ",
-				"issue": "5",
+				"date": "2009",
+				"abstractNote": "Cancer Syndromes is a comprehensive multimedia resource for selected single gene cancer syndromes.\nSyndromes currently included are Peutz-Jeghers syndrome, juvenile polyposis, Birt-Hogg-Dubé syndrome, multiple endocrine neoplasia type 1\nand familial atypical multiple mole melanoma syndrome. For each syndrome the history, epidemiology, natural history and management are reviewed.\nIf possible the initial report in the literature of each syndrome is included as an appendix. Chapters are extensively annotated with figures and\nmovie clips. \nMission Statement: Improving the care of cancer syndrome patients.",
+				"callNumber": "NBK1825",
+				"extra": "PMID: 21249754",
 				"language": "eng",
-				"abstractNote": "Zotero is a powerful free personal bibliographic manager (PBM) for writers. Use of a PBM allows the writer to focus on content, rather than the tedious details of formatting citations and references. Zotero 2.0 (http://www.zotero.org) has new features including the ability to synchronize citations with the off-site Zotero server and the ability to collaborate and share with others. An overview on how to use the software and discussion about the strengths and limitations are included.",
-				"DOI": "10.1097/NNE.0b013e3181ed81e4",
-				"extra": "PMID: 20729678",
 				"libraryCatalog": "PubMed",
-				"shortTitle": "Zotero",
-				"title": "Zotero: harnessing the power of a personal bibliographic manager",
-				"pages": "205-207",
-				"publicationTitle": "Nurse Educator",
-				"volume": "35",
-				"date": "2010 Sep-Oct"
+				"place": "Bethesda (MD)",
+				"publisher": "National Center for Biotechnology Information (US)",
+				"rights": "Copyright © 2009-, Douglas L Riegert-Johnson.",
+				"url": "http://www.ncbi.nlm.nih.gov/books/NBK1825/",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
 	{
-		"type": "search",
-		"input": {
-			"contextObject": "url_ver=Z39.88-2004&ctx_ver=Z39.88-2004&rfr_id=info:sid/zotero.org:2&rft_id=info:doi/10.1097/NNE.0b013e3181ed81e4&rft_id=info:pmid/20729678&rft_val_fmt=info:ofi/fmt:kev:mtx:journal&rft.genre=article&rft.atitle=Zotero: harnessing the power of a personal bibliographic manager&rft.jtitle=Nurse educator&rft.stitle=Nurse Educ&rft.volume=35&rft.issue=5&rft.aufirst=Jaekea T&rft.aulast=Coar&rft.au=Jaekea T Coar&rft.au=Jeanne P Sewell&rft.date=2010-10&rft.pages=205-207&rft.spage=205&rft.epage=207&rft.issn=1538-9855&rft.language=eng"
-		},
+		"type": "web",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/?term=testing",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.ncbi.nlm.nih.gov/sites/myncbi/1-kV-e_Xzodkb/collections/59603323/public/",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.ncbi.nlm.nih.gov/myncbi/1-kV-e_Xzodkb/bibliography/public/",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/31221671/",
 		"items": [
 			{
 				"itemType": "journalArticle",
+				"title": "Recognising bias in studies of diagnostic tests part 2: interpreting and verifying the index test",
 				"creators": [
 					{
-						"creatorType": "author",
-						"lastName": "Coar",
-						"firstName": "Jaekea T."
+						"firstName": "Bory",
+						"lastName": "Kea",
+						"creatorType": "author"
 					},
 					{
-						"creatorType": "author",
-						"lastName": "Sewell",
-						"firstName": "Jeanne P."
+						"firstName": "M. Kennedy",
+						"lastName": "Hall",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Ralph",
+						"lastName": "Wang",
+						"creatorType": "author"
+					}
+				],
+				"date": "2019-08",
+				"DOI": "10.1136/emermed-2019-208447",
+				"ISSN": "1472-0213",
+				"abstractNote": "Multiple pitfalls can occur with the conduct and analysis of a study of diagnostic tests, resulting in biased accuracy. Our conceptual model includes three stages: patient selection, interpretation of the index test and disease verification. In part 2, we focus on (1) Interpretation bias (or workup bias): where the classification of an indeterminate index test result can bias the accuracy of a test or how lack of blinding can bias a subjective test result, and (2) Disease verification bias: where the index test result is incorporated into the gold standard or when the gold standard is applied only to a select population as the gold standard is an invasive test. In an example with age-adjusted D-dimer for pulmonary embolism, differential verification bias was a limitation due to the use of two gold standards-CT for a high-risk population and follow-up for symptoms in a low-risk population. However, there are circumstances when certain choices in study design are unavoidable, and result in biased test characteristics. In this case, the informed reader will better judge the quality of a study by recognising the potential biases and limitations by being methodical in their approach to understanding the methods, and in turn, better apply studies of diagnostic tests into their clinical practice.",
+				"issue": "8",
+				"journalAbbreviation": "Emerg Med J",
+				"language": "eng",
+				"libraryCatalog": "PubMed",
+				"pages": "501-505",
+				"publicationTitle": "Emergency medicine journal: EMJ",
+				"shortTitle": "Recognising bias in studies of diagnostic tests part 2",
+				"volume": "36",
+				"attachments": [],
+				"tags": [
+					{
+						"tag": "Diagnostic Tests, Routine"
+					},
+					{
+						"tag": "Humans"
+					},
+					{
+						"tag": "Observer Variation"
+					},
+					{
+						"tag": "Research Design"
+					},
+					{
+						"tag": "Sensitivity and Specificity"
+					},
+					{
+						"tag": "imaging"
+					},
+					{
+						"tag": "research, methods"
+					},
+					{
+						"tag": "statistics"
+					},
+					{
+						"tag": "ultrasound"
 					}
 				],
 				"notes": [],
-				"tags": [
-					"Bibliography as Topic",
-					"Database Management Systems",
-					"Humans"
-				],
-				"seeAlso": [],
-				"attachments": [
-					{
-						"title": "PubMed entry",
-						"mimeType": "text/html",
-						"snapshot": false
-					}
-				],
-				"ISSN": "1538-9855",
-				"journalAbbreviation": "Nurse Educ",
-				"issue": "5",
-				"language": "eng",
-				"abstractNote": "Zotero is a powerful free personal bibliographic manager (PBM) for writers. Use of a PBM allows the writer to focus on content, rather than the tedious details of formatting citations and references. Zotero 2.0 (http://www.zotero.org) has new features including the ability to synchronize citations with the off-site Zotero server and the ability to collaborate and share with others. An overview on how to use the software and discussion about the strengths and limitations are included.",
-				"DOI": "10.1097/NNE.0b013e3181ed81e4",
-				"extra": "PMID: 20729678",
-				"libraryCatalog": "PubMed",
-				"shortTitle": "Zotero",
-				"title": "Zotero: harnessing the power of a personal bibliographic manager",
-				"pages": "205-207",
-				"publicationTitle": "Nurse Educator",
-				"volume": "35",
-				"date": "2010 Sep-Oct"
+				"seeAlso": []
 			}
 		]
+	},
+	{
+		"type": "web",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/32633716/",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "Muscle-derived Myoglianin regulates Drosophila imaginal disc growth",
+				"creators": [
+					{
+						"firstName": "Ambuj",
+						"lastName": "Upadhyay",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Aidan J.",
+						"lastName": "Peterson",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Myung-Jun",
+						"lastName": "Kim",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Michael B.",
+						"lastName": "O'Connor",
+						"creatorType": "author"
+					}
+				],
+				"date": "2020-07-07",
+				"DOI": "10.7554/eLife.51710",
+				"ISSN": "2050-084X",
+				"abstractNote": "Organ growth and size are finely tuned by intrinsic and extrinsic signaling molecules. In Drosophila, the BMP family member Dpp is produced in a limited set of imaginal disc cells and functions as a classic morphogen to regulate pattern and growth by diffusing throughout imaginal discs. However, the role of TGFβ/Activin-like ligands in disc growth control remains ill-defined. Here, we demonstrate that Myoglianin (Myo), an Activin family member, and a close homolog of mammalian Myostatin (Mstn), is a muscle-derived extrinsic factor that uses canonical dSmad2-mediated signaling to regulate wing size. We propose that Myo is a myokine that helps mediate an allometric relationship between muscles and their associated appendages.",
+				"journalAbbreviation": "Elife",
+				"language": "eng",
+				"libraryCatalog": "PubMed",
+				"pages": "e51710",
+				"publicationTitle": "eLife",
+				"volume": "9",
+				"attachments": [],
+				"tags": [
+					{
+						"tag": "Animals"
+					},
+					{
+						"tag": "D. melanogaster"
+					},
+					{
+						"tag": "Drosophila Proteins"
+					},
+					{
+						"tag": "Drosophila melanogaster"
+					},
+					{
+						"tag": "Imaginal Discs"
+					},
+					{
+						"tag": "Larva"
+					},
+					{
+						"tag": "Muscles"
+					},
+					{
+						"tag": "Myoglianin"
+					},
+					{
+						"tag": "Myostatin"
+					},
+					{
+						"tag": "Signal Transduction"
+					},
+					{
+						"tag": "Smad Proteins, Receptor-Regulated"
+					},
+					{
+						"tag": "Transforming Growth Factor beta"
+					},
+					{
+						"tag": "developmental biology"
+					},
+					{
+						"tag": "growth factors"
+					},
+					{
+						"tag": "imaginal disc"
+					},
+					{
+						"tag": "muscle fiber"
+					},
+					{
+						"tag": "tgf beta"
+					}
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://pubmed.ncbi.nlm.nih.gov/searches/3851259/?startDate=2020-11-07+06%3A06%3A14&endDate=2020-12-05+06%3A04%3A39&token=1J3VmSOOIDc&sort=date",
+		"items": "multiple"
 	}
 ]
 /** END TEST CASES **/

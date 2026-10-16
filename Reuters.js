@@ -2,21 +2,21 @@
 	"translatorID": "83979786-44af-494a-9ddb-46654e0486ef",
 	"label": "Reuters",
 	"creator": "Avram Lyon, Michael Berkowitz, Sebastian Karcher",
-	"target": "^https?://(www|blogs)?\\.reuters\\.com/",
-	"minVersion": "2.1.9",
+	"target": "^https?://\\w+\\.reuters\\.com/",
+	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2015-06-02 21:16:57"
+	"lastUpdated": "2021-07-05 16:50:37"
 }
 
 /*
 	***** BEGIN LICENSE BLOCK *****
 
 	Reuters Translator
-	Copyright © 2011 Avram Lyon, ajlyon@gmail.com, Sebastian Karcher
+	Copyright © 2011-2021 Avram Lyon, Sebastian Karcher, and Abe Jellinek
 
 	This file is part of Zotero.
 
@@ -36,106 +36,89 @@
 	***** END LICENSE BLOCK *****
 */
 
+
 function detectWeb(doc, url) {
-	if (url.match(/^https?:\/\/(www\.)?reuters\.com\/article/)) {
+	if (attr(doc, 'meta[property="og:type"]', 'content') == 'article') {
 		return "newspaperArticle";
-	} else if (url.match(/^https?:\/\/blogs\.reuters\.com/)) {
-	  return "blogPost";
-	} else if (url.match(/search\?/)) {
-	  return "multiple";
 	}
+	else if (url.includes('/search/') && getSearchResults(doc, true)) {
+		return "multiple";
+	}
+	return false;
 }
 
-function doWeb(doc, url) {
-	var articles = new Array();
-	if (detectWeb(doc, url) == "multiple") {
-		var items = {};
-		var titles = doc.evaluate('//li[@class="searchHeadline"]/a', doc, null, XPathResult.ANY_TYPE, null);
-		var title;
-		while (title = titles.iterateNext()) {
-			items[title.href] = title.textContent;
-		}
 
-		Zotero.selectItems(items, function (items) {
+function getSearchResults(doc, checkOnly) {
+	var items = {};
+	var found = false;
+	var rows = doc.querySelectorAll('h3.search-result-title>a');
+	for (let row of rows) {
+		let href = row.href;
+		let title = ZU.trimInternal(row.textContent);
+		if (!href || !title) continue;
+		if (checkOnly) return true;
+		found = true;
+		items[href] = title;
+	}
+	return found ? items : false;
+}
+
+
+function doWeb(doc, url) {
+	if (detectWeb(doc, url) == "multiple") {
+		Zotero.selectItems(getSearchResults(doc, false), function (items) {
 			if (!items) {
-				return true;
+				return;
 			}
+			var articles = [];
 			for (var i in items) {
 				articles.push(i);
 			}
-			Zotero.Utilities.processDocuments(articles, scrape, function () {
-				Zotero.done();
-			});
-			Zotero.wait();
+			ZU.processDocuments(articles, scrape);
 		});
-	} else {
+	}
+	else {
 		scrape(doc, url);
 	}
 }
 
+
 function scrape(doc, url) {
-	if (detectWeb(doc, url) == "newspaperArticle") {
-		var item = new Zotero.Item("newspaperArticle");
+	var translator = Zotero.loadTranslator('web');
+	// Embedded Metadata
+	translator.setTranslator('951c027d-74ac-47d4-a107-9c3069ab7b48');
+	translator.setDocument(doc);
 
-		item.date = doc.evaluate('//meta[@name="REVISION_DATE"]', doc, null, XPathResult.ANY_TYPE, null).iterateNext().content;
-		var byline = ZU.xpathText(doc, '//div[@id="articleInfo"]//p[@class="byline"]');
-		if (byline) {
-			var authors = byline.substr(3).split(/and |,/);
-			for (var i=0; i<authors.length; i++) {
-				item.creators.push(authorFix(authors[i]));
-			}
+	translator.setHandler('itemDone', function (obj, item) {
+		item.creators = [];
+		let authors = doc.querySelectorAll('[rel="author"]');
+		for (let author of authors) {
+			item.creators.push(authorFix(author.textContent));
 		}
+		
 		item.publicationTitle = "Reuters";
-	}
-	if (detectWeb(doc, url) == "blogPost") {
-		var item = new Zotero.Item("blogPost");
-
-		item.date = ZU.xpathText(doc, '//div[@id="single"]/div[@class="timestamp"]');
-		var byline = ZU.xpathText(doc, '//div[@class="author"]');
-		if (byline) {
-			var authors = byline.split(/and |,/);
-			for (var i=0; i<authors.length; i++) {
-				item.creators.push(authorFix(authors[i]));
-			}
-		}
-
-		var blogtitle = ZU.xpathText(doc, '//h1');
-		if (blogtitle) item.publicationTitle = "Reuters Blogs - " + blogtitle;
-		else item.publicationTitle = "Reuters Blogs";
-	}
-
-	//general fields
-	if(item) {
-		item.title = ZU.xpathText(doc, '//meta[@property="og:title"]/@content');
-
-		item.place = ZU.xpathText(doc, '//div[@id="articleInfo"]//span[@class="location"]');
-		if (item.place) {
-			if (item.place == item.place.toUpperCase()) item.place = Zotero.Utilities.capitalizeTitle(item.place.toLowerCase(), true);
-		}
-
-		item.url = ZU.xpathText(doc, '//link[@rel="canonical"]/@href');
-		item.abstractNote = ZU.xpathText(doc, '//meta[@name="description"]/@content');
-
-		var tags = ZU.xpathText(doc, '//meta[@name="keywords"]/@content');
-		if(tags)
-			item.tags = tags.trim().split(/\s*,\s*/);
-
-		item.attachments.push({title: 'Snapshot', document: doc});
-
+		item.tags = attr(doc, 'meta[property$="article:tag"]', 'content')
+			.split(/\s*[/,]\s*/).map(tag => ({ tag }));
+		
 		item.complete();
-	}
+	});
+
+	translator.getTranslatorObject(function (trans) {
+		trans.itemType = detectWeb(doc);
+		trans.doWeb(doc, url);
+	});
 }
 
 function authorFix(author) {
 	// Sometimes we have "By Author"
-	if (author.substr(0, 3).toLowerCase() == "by ") {
-		author = author.substr(3);
-	}
+	author = author.replace(/^\s*by/i, '');
+
 	var cleaned = Zotero.Utilities.cleanAuthor(author, "author");
 	// If we have only one name, set the author to one-name mode
-	if (cleaned.firstName == "") {
-		cleaned["fieldMode"] = true;
-	} else {
+	if (!cleaned.firstName) {
+		cleaned.fieldMode = 1;
+	}
+	else {
 		// We can check for all lower-case and capitalize if necessary
 		// All-uppercase is handled by cleanAuthor
 		cleaned.firstName = (cleaned.firstName == cleaned.firstName.toLowerCase()) ? Zotero.Utilities.capitalizeTitle(cleaned.firstName, true) : cleaned.firstName;
@@ -148,115 +131,125 @@ function authorFix(author) {
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://www.reuters.com/article/2011/11/14/us-eurozone-idUSTRE7AC15K20111114",
+		"url": "https://www.reuters.com/article/us-eurozone/europe-could-be-in-worst-hour-since-ww2-merkel-idUSTRE7AC15K20111114",
 		"items": [
 			{
 				"itemType": "newspaperArticle",
+				"title": "Europe could be in worst hour since WW2: Merkel",
+				"creators": [],
+				"date": "2011-11-14T00:16:09Z",
+				"abstractNote": "Prime Minister-designate Mario Monti meets the leaders of Italy's biggest two parties on Tuesday to discuss the \"many sacrifices\" needed to reverse a collapse in market confidence that is driving an ever deepening euro zone debt crisis.",
+				"language": "en",
+				"libraryCatalog": "www.reuters.com",
+				"publicationTitle": "Reuters",
+				"section": "Business News",
+				"shortTitle": "Europe could be in worst hour since WW2",
+				"url": "https://www.reuters.com/article/us-eurozone-idUSTRE7AC15K20111114",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [
+					{
+						"tag": "Debt"
+					},
+					{
+						"tag": "Diplomacy"
+					},
+					{
+						"tag": "EUROZONE"
+					},
+					{
+						"tag": "Economic News"
+					},
+					{
+						"tag": "Euro Zone as a Whole"
+					},
+					{
+						"tag": "Europe"
+					},
+					{
+						"tag": "European Union"
+					},
+					{
+						"tag": "Fixed Income Markets"
+					},
+					{
+						"tag": "Foreign Policy"
+					},
+					{
+						"tag": "Government"
+					},
+					{
+						"tag": "Government Finances"
+					},
+					{
+						"tag": "Greece"
+					},
+					{
+						"tag": "Italy"
+					},
+					{
+						"tag": "National Government Debt"
+					},
+					{
+						"tag": "Politics"
+					},
+					{
+						"tag": "US"
+					},
+					{
+						"tag": "Western Europe"
+					}
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.reuters.com/search/news?blob=europe",
+		"items": "multiple"
+	},
+	{
+		"type": "web",
+		"url": "https://www.reuters.com/world/americas/perus-indigenous-hope-voice-last-under-new-president-2021-07-05/",
+		"items": [
+			{
+				"itemType": "newspaperArticle",
+				"title": "Peru's indigenous hope for a voice, at last, under new president",
 				"creators": [
 					{
-						"firstName": "James",
-						"lastName": "Mackenzie",
+						"firstName": "Stefanie",
+						"lastName": "Eschenbacher",
 						"creatorType": "author"
 					},
 					{
-						"firstName": "Barry",
-						"lastName": "Moody",
+						"firstName": "Angela",
+						"lastName": "Ponce",
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"Germany",
-					"Greece",
-					"Italy",
-					"Germany",
-					"Greece",
-					"Italy",
-					"Germany",
-					"Angela Merkel",
-					"Antonis Samaras",
-					"George Papandreou",
-					"Harry Papachristou",
-					"Jens Weidmann",
-					"Lucas Papademos",
-					"Mario Monti",
-					"Olli Rehn",
-					"Philip Pullella",
-					"Silvio Berlusconi",
-					"Angela Merkel",
-					"Antonis Samaras",
-					"George Papandreou",
-					"Giorgio Napolitano",
-					"Harry Papachristou",
-					"Jack Ablin",
-					"Jens Weidmann",
-					"Kai Pfaffenbach",
-					"Lucas Papademos",
-					"Mario Monti",
-					"Olli Rehn",
-					"Philip Pullella",
-					"Silvio Berlusconi",
-					"Angela Merkel",
-					"Kai Pfaffenbach"
-				],
-				"seeAlso": [],
-				"attachments": [
-					{
-						"title": "Snapshot"
-					}
-				],
-				"date": "Mon Nov 14 21:16:28 UTC 2011",
+				"date": "2021-07-05T10:00:00Z",
+				"abstractNote": "Maxima Ccalla, 60, an indigenous Quechua woman, has spent her life tilling the harsh soil in Peru's Andean highlands, resigned to a fate far removed from the vast riches buried deep beneath her feet in seams of copper, zinc and gold.",
+				"libraryCatalog": "www.reuters.com",
 				"publicationTitle": "Reuters",
-				"title": "Europe could be in worst hour since WW2: Merkel",
-				"place": "Rome",
-				"url": "http://www.reuters.com/article/2011/11/14/us-eurozone-idUSTRE7AC15K20111114",
-				"abstractNote": "ROME (Reuters) - Prime Minister-designate Mario Monti meets the leaders of Italy's biggest two parties on Tuesday to discuss the many sacrifices needed to reverse a collapse in market confidence that is",
-				"libraryCatalog": "Reuters",
-				"accessDate": "CURRENT_TIMESTAMP",
-				"shortTitle": "Europe could be in worst hour since WW2"
-			}
-		]
-	},
-	{
-		"type": "web",
-		"url": "http://blogs.reuters.com/lawrencesummers/2012/03/26/its-too-soon-to-return-to-normal-policies/",
-		"items": [
-			{
-				"itemType": "blogPost",
-				"creators": [
-					{
-						"firstName": "Lawrence",
-						"lastName": "Summers",
-						"creatorType": "author"
-					}
-				],
-				"notes": [],
-				"tags": [
-					"deficit",
-					"fiscal policy",
-					"housing",
-					"recovery",
-					"unemployment"
-				],
-				"seeAlso": [],
+				"section": "Americas",
+				"url": "https://www.reuters.com/world/americas/perus-indigenous-hope-voice-last-under-new-president-2021-07-05/",
 				"attachments": [
 					{
-						"title": "Snapshot"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
-				"title": "It’s too soon to return to normal policies",
-				"abstractNote": "After years when the risks to the consensus modest-growth forecast were to the downside, they are now very much two-sided.",
-				"url": "http://blogs.reuters.com/lawrencesummers/2012/03/26/its-too-soon-to-return-to-normal-policies/",
-				"publicationTitle": "Reuters Blogs - Lawrence Summers",
-				"libraryCatalog": "Reuters",
-				"accessDate": "CURRENT_TIMESTAMP"
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
-	},
-	{
-		"type": "web",
-		"url": "http://www.reuters.com/search?blob=europe",
-		"items": "multiple"
 	}
 ]
 /** END TEST CASES **/

@@ -2,14 +2,14 @@
 	"translatorID": "0cc8e259-106e-4793-8c26-6ec8114a9160",
 	"label": "SlideShare",
 	"creator": "Michael Berkowitz",
-	"target": "https?://[^/]*slideshare\\.net/",
+	"target": "^https?://[^/]*slideshare\\.net/",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2016-10-17 14:24:36"
+	"lastUpdated": "2017-01-01 15:33:29"
 }
 
 function scrape(doc, url) {
@@ -18,14 +18,14 @@ function scrape(doc, url) {
 				ZU.xpathText(doc, '/html/head/title');
 
 	var creator = ZU.xpathText(doc, '//div[@itemprop="author"]//span[@itemprop="name"]');
-	if(creator && creator.trim())
+	if (creator && creator.trim())
 		item.creators.push({lastName:creator.trim(), creatorType:'author'});
 
 	item.abstractNote = ZU.xpathText(doc, '//p[@id="slideshow-description-paragraph"]');
 
 	var tags = ZU.xpathText(doc, '//meta[contains(@name, "slideshow_tag")]/@content');
 	if (tags) tags = tags.split(/\s*,\s*/);
-	for(var i in tags) {
+	for (var i in tags) {
 		item.tags.push(tags[i].trim());
 	}
 
@@ -35,13 +35,13 @@ function scrape(doc, url) {
 	item.type = ZU.xpathText(doc, '//div[contains(@class, "categories-container")]//a[1]');
 
 	var date = ZU.xpathText(doc, '//meta[@property = "slideshare:created_at"]/@content');
-	if(date) item.date = date;
+	if (date) item.date = date;
 	item.url = url;
 	item.libraryCatalog = "SlideShare";
 
 	var loggedin = !doc.getElementById('login_link');
 	var pdfurl = ZU.xpathText(doc, '//li[@class="action-download"]/a/@href');
-	if(loggedin && pdfurl) {
+	if (loggedin && pdfurl) {
 		//is this always pdf?
 		item.attachments.push({url:pdfurl, title:"SlideShare Slide Show", mimeType:"application/pdf"});
 	}
@@ -76,35 +76,36 @@ function doWeb(doc, url) {
 	} else {
 		scrape(doc, url);
 	}
-}/** BEGIN TEST CASES **/
+}
+/** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://www.slideshare.net/eby/zotero-and-you-or-bibliography-on-the-semantic-web",
+		"url": "https://www.slideshare.net/eby/zotero-and-you-or-bibliography-on-the-semantic-web",
 		"items": [
 			{
 				"itemType": "presentation",
+				"title": "Zotero and You, or Bibliography on the Semantic Web",
 				"creators": [
 					{
 						"lastName": "eby",
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [],
-				"seeAlso": [],
-				"attachments": [],
-				"title": "Zotero and You, or Bibliography on the Semantic Web",
-				"abstractNote": "Representatives from the Center for History and New Media will introduce Zotero, a free and open source extension for Firefox that allows you to collect, organize and archive your research materials. After a brief demo and explanation, we will discuss best practices for making your projects \"Zotero ready\" and other opportunities to integrate with your digital projects through the Zotero API.",
 				"date": "2008-03-06 10:51:58 UTC",
-				"url": "http://www.slideshare.net/eby/zotero-and-you-or-bibliography-on-the-semantic-web",
-				"presentationType": "Business"
+				"abstractNote": "Representatives from the Center for History and New Media will introduce Zotero, a free and open source extension for Firefox that allows you to collect, organize and archive your research materials. After a brief demo and explanation, we will discuss best practices for making your projects \"Zotero ready\" and other opportunities to integrate with your digital projects through the Zotero API.",
+				"presentationType": "Business",
+				"url": "https://www.slideshare.net/eby/zotero-and-you-or-bibliography-on-the-semantic-web",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
 	{
 		"type": "web",
-		"url": "http://www.slideshare.net/search/slideshow?searchfrom=header&q=zotero",
+		"url": "https://www.slideshare.net/search/slideshow?searchfrom=header&q=zotero",
 		"items": "multiple"
 	}
 ]

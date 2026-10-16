@@ -1,375 +1,350 @@
 {
 	"translatorID": "1e1e35be-6264-45a0-ad2e-7212040eb984",
-	"label": "APA PsycNET",
-	"creator": "Michael Berkowitz and Aurimas Vinckevicius",
-	"target": "^https?://psycnet\\.apa\\.org/",
+	"label": "APA PsycNet",
+	"creator": "Philipp Zumstein",
+	"target": "^https?://(psycnet|doi)\\.apa\\.org/",
 	"minVersion": "3.0",
 	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2016-08-12 13:07:14"
+	"lastUpdated": "2025-03-10 19:48:42"
 }
+
+/*
+	***** BEGIN LICENSE BLOCK *****
+
+	Copyright © 2017-2021 Philipp Zumstein
+	
+	This file is part of Zotero.
+
+	Zotero is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Zotero is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Affero General Public License for more details.
+
+	You should have received a copy of the GNU Affero General Public License
+	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+
+	***** END LICENSE BLOCK *****
+*/
+
+
+// Some test cases are only working in the browser with some AJAX loading:
+// 1) http://psycnet.apa.org/PsycBOOKS/toc/10023
+// 2) follow a link in a search
+// 3) search page
+// 4) journal page
+//
+// Moreover, after three test cases you have to load an psycnet url in the browser
+// to avoid some automatic download detection.
+
 
 function detectWeb(doc, url) {
-	var type;
-	url = url.toLowerCase();
-	if (url.indexOf('search.searchresults') != -1) {
-	//permission error (still relevant?)
-	//return false;
-		return "multiple";
-	}
-
-	if(url.indexOf('search.displayrecord') != -1) {
-		type = doc.getElementById('rdcPubType');
-		if(!type) return false;
-		type = type.textContent.replace(/[\s\[\]]/g,'').split(';');
-		switch(type[0].toLowerCase()) {
-			case 'book':
-				return 'book';
-			case 'chapter':
-				return 'bookSection';
-			case 'journalarticle':
-			case 'editorial':
-				return 'journalArticle';
-			default:
-				return false;
-		}
-	}
-
-	if(url.search(/journals\/\S+\/\d+\/\d+\/\d+\//) != -1) {
-		return "journalArticle";
-	}
-
-	if(url.search(/\/books\/\d+/) != -1) {
-		var pubType = doc.getElementById('rdcPubType');
-		if (pubType && pubType.textContent.indexOf('Chapter') != -1) {
+	if (url.includes('/search/display?')
+			|| url.includes('/record/')
+			|| url.includes('/fulltext/')
+			|| url.includes('/buy/')
+			|| url.includes('/doiLanding?doi=')) {
+		if (attr(doc, 'meta[name="og:type"]', 'content') == 'Chapter') {
 			return "bookSection";
 		}
-		
-		fields.title = '(//h3[@id="bwcBookTitle"])[1]';
-		fields.authors = '(//div[@id="bwcBookAuthors"])[1]';
-		fields.voliss = '(//div[@id="bwcBookSource"])[1]';
-		fields.abstract = '(//div[@id="bwcAbstract"])[1]';
-
-		return "book";
-	}
-
-	if(url.indexOf('buy.optiontobuy') != -1
-		&& url.indexOf('id=') != -1
-		&& (type = doc.getElementById('obArticleHeaderText')) ) {
-		fields.title = '(//div[@id="obArticleTitleHighlighted"])[1]';
-		fields.authors = '(//div[@id="obAuthor"])[1]';
-		fields.voliss = '(//div[@id="obSource"])[1]';
-		fields.abstract = '(//div[@id="obAbstract"])[1]';
-
-		if(type.textContent.toLowerCase().indexOf('article') != -1) {
-			return 'journalArticle';
+		else if (doc.getElementById('bookchapterstoc')) {
+			return "book";
 		}
-
-		if(type.textContent.toLowerCase().indexOf('chapter') != -1) {
-			return 'bookSection';
+		else {
+			return "journalArticle";
 		}
 	}
-
-	/**for the book database - item IDs ending in 000 are books
-	 * everything else chapters
-	 */
-	if (url.search(/psycinfo\/[0-9]{4}-[0-9]+-000/) != -1){
-		return "book";
+	if (url.includes('/search/results?') || url.includes('/journal/')) { // && getSearchResults(doc, true)) {
+		return "multiple";
 	}
-
-	if (url.search(/psycinfo\/[0-9]{4}-[0-9]+-[0-9]{3}/) != -1){
-		return "bookSection";
-	}
-}
-
-//default field xpath
-var fields = {
-	title: '(//div[@id="rdcTitle"])[1]',
-	authors: '(//div[@id="rdcAuthors"])[1]',
-	voliss: '(//div[@id="rdcSource"])[1]',
-	abstract: '//div[@id="rdRecord"]/div[@class="rdRecordSection"][2]'
-}
-
-function getField(field, doc) {
-	var val = ZU.xpathText(doc, field);
-	if(val) val = ZU.trimInternal(val);
-	return val;
-}
-
-//for scraping publication information directly from pages
-var volissRe = {
-	journalArticle: 
-		/^(.+?)(?:,\sVol\s(\d+)\((\d+)\))?,\s(\w+\s(?:\d+\s*,\s)?\d{4}),\s(?:(\d+-\d+)|No Pagination Specified).(?:\sdoi:\s(.+))?$/i,
-	bookSection:
-		/^(.+?),\s\((\d{4})\)\.\s(.+?),\s\(pp\.\s(\d+-\d+)\)\.\s(.+?):\s(.+?),\s(?:(\w+))?,\s(\d+)\spp\.(?:\sdoi:\s(.+))?/i,
-	book:
-		/^(.+?):\s(.+?)(?:\.\s\((\d{4})\)\.\s(\w+)\s(\d+)\spp\.\sdoi:\s(.+))?$/i
-};
-
-var creatorMap = {
-	Ed: 'editor'
-};
-
-function doWeb(doc, url) {
-	var type = detectWeb(doc, url);
-	if (type == "multiple") {
-		var items = new Object();
-		var titles = ZU.xpath(doc, '//div[@class="srhcTitle"]/a');
-		for(var i=0, n=titles.length; i<n; i++) {
-			items[titles[i].href] = titles[i].textContent;
-		}
-		Zotero.selectItems(items, function(selectedItems) {
-			if(!selectedItems) return true;
 	
-			var arts = new Array();
-			for(var i in selectedItems) {
-				arts.push(i);
-			}
-			ZU.processDocuments(arts, scrape);
-		});
-	} else {
-		scrape(doc, url, type);
+	return false;
+}
+
+function getSearchResults(doc, checkOnly) {
+	var items = {};
+	var found = false;
+	var rows = doc.querySelectorAll('a.article-title');
+	for (var i = 0; i < rows.length; i++) {
+		var href = rows[i].href;
+		var title = ZU.trimInternal(rows[i].textContent);
+		if (!href || !title) continue;
+		if (checkOnly) return true;
+		found = true;
+		items[href] = title;
+	}
+	return found ? items : false;
+}
+
+
+async function doWeb(doc, url) {
+	if (detectWeb(doc, url) == "multiple") {
+		let items = await Zotero.selectItems(getSearchResults(doc, false));
+		if (!items) {
+			return;
+		}
+		for (let url of Object.keys(items)) {
+			await scrape(await requestDocument(url), url);
+		}
+	}
+	else {
+		await scrape(doc, url);
 	}
 }
 
-//try to figure out ids that we can use for fetching RIS
-function getIds(doc, url) {
-	var ret = {}
-	ret.id = ZU.xpathText(doc, '(//input[@name="id"])[1]/@value') || '';
-	ret.lstUID = ZU.xpathText(doc,
-			'(//input[@name="lstUIDs"][@id="srhLstUIDs"])[1]/@value');
-	if(ret.id || ret.lstUID) return ret;
 
-	url = url.toLowerCase();
-	/**on the /book/\d+ pages, we can find the UID in
+async function scrape(doc, url) {
+	var uid = await getIds(doc, url.replace(/#.*$/, ''));
+	if (!uid) {
+		throw new Error("ID not found");
+	}
+	
+	var productCode;
+	var db = doc.getElementById('database') || doc.querySelector('doi-landing .meta span');
+	if (db) {
+		db = db.parentNode.textContent.toLowerCase();
+		if (db.includes('psycarticles')) {
+			productCode = 'PA';
+		}
+		else if (db.includes('psycbooks')) {
+			productCode = 'PB';
+		}
+		else if (db.includes('psycinfo')) {
+			productCode = 'PI';
+		}
+		else if (db.includes('psycextra')) {
+			productCode = 'PE';
+		}
+	}
+	else {
+		// default, e.g. if page is not completely loaded
+		productCode = 'PI';
+	}
+	
+	var postData = JSON.stringify({
+		api: "record.exportRISFile",
+		params: {
+			UIDList: [{ UID: uid, ProductCode: productCode }],
+			exportType: "zotero"
+		}
+	});
+	var headers = {
+		'Content-Type': 'application/json',
+		Referer: url
+	};
+
+	let apiReturnData = await requestJSON('/api/request/record.exportRISFile', {
+		method: 'POST',
+		headers: headers,
+		body: postData,
+	});
+
+	if (apiReturnData && apiReturnData.isRisExportCreated) {
+		// 2. Download the requested data (after step 1)
+		let data = await requestText('/ris/download');
+		if (data.includes('Content: application/x-research-info-systems')) {
+			await processRIS(data, doc);
+		}
+		else {
+			// sometimes (e.g. during testing) the data is not loaded
+			// but a meta redirect to a captcha page mentioning
+			Z.debug("The APA anomaly detection think we are doing "
+				+ "something unusual (sigh). Please reload any APA page e.g. "
+				+ "http://psycnet.apa.org/ in your browser and try again.");
+			Z.debug(data);
+		}
+	}
+}
+
+
+async function processRIS(text, doc) {
+	let pdfURL = attr(doc, 'a[href*="/fulltext"]', 'href');
+	if (!pdfURL) {
+		Zotero.debug('Fetching institution ID for PDF');
+		try {
+			let uid = doc.location.pathname.match(/\/(?:record|fulltext)\/([^/.]+)/)[1];
+			let { institution } = await requestJSON(
+				'https://psycnet.apa.org/api/request/institution.getInstitutionByIpAddress', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({
+						api: 'institution.getInstitutionByIpAddress',
+						params: { uid }
+					})
+				}
+			);
+			if (institution) {
+				pdfURL = `https://psycnet.apa.org/fulltext/${uid}.pdf?auth_id=${institution.ringGoldId}&returnUrl=${encodeURIComponent(doc.location.href)}`;
+			}
+		}
+		catch (e) {
+			Zotero.debug('Failed to fetch institution ID');
+			Zotero.debug(e);
+		}
+	}
+
+	var translator = Zotero.loadTranslator("import");
+	translator.setTranslator("32d59d2d-b65a-4da4-b0a3-bdd3cfb979e7");
+	translator.setString(text);
+	translator.setHandler("itemDone", function (obj, item) {
+		item.title = cleanTitle(item.title);
+		if (item.publication) item.publication = cleanTitle(item.publication);
+		if (item.bookTitle) item.bookTitle = cleanTitle(item.bookTitle);
+		if (item.series) item.series = cleanTitle(item.series);
+		if (item.place) item.place = item.place.replace(/\s+/g, ' ');
+		if (item.ISSN) item.ISSN = ZU.cleanISSN(item.ISSN);
+		if (item.pages && item.pages.includes('No Pagination Specified')) {
+			delete item.pages;
+		}
+		for (var i = 0; i < item.tags.length; i++) {
+			item.tags[i] = item.tags[i].replace(/^\*/, '');
+		}
+		if (pdfURL) {
+			item.attachments.push({
+				url: pdfURL,
+				title: "Full Text PDF",
+				mimeType: "application/pdf"
+			});
+		}
+		else {
+			item.attachments.push({
+				title: "Snapshot",
+				document: doc
+			});
+		}
+		item.complete();
+	});
+	await translator.translate();
+}
+
+
+// try to figure out ids that we can use for fetching RIS
+async function getIds(doc, url) {
+	Z.debug('Finding IDs in ' + url);
+	// try to extract uid from the table
+	var uid = text(doc, '#uid + dd') || text(doc, '#bookUID');
+	if (uid) {
+		return uid;
+	}
+
+	// try to extract uid from the url
+	if (url.includes('/record/') || url.includes('/fulltext/')) {
+		let m = url.match(/\/(?:record|fulltext)\/([\d-]*)/);
+		if (m && m[1]) {
+			return m[1];
+		}
+	}
+
+	// DOI landing pages include a link to the /record/ page
+	if (url.includes('/doiLanding') && doc.querySelector('.title > a')) {
+		let m = attr(doc, '.title > a', 'href').match(/\/record\/([\d-]*)/);
+		if (m && m[1]) {
+			return m[1];
+		}
+	}
+	
+	/** on the book pages, we can find the UID in
 	 * the Front matter and Back matter links
 	 */
-	if(url.search(/\/books\/\d+/) != -1) {
-		var links = ZU.xpath(doc,
-			'//a[@target="_blank" and contains(@href,"&id=")]');
-		var m;
-		for(var i=0, n=links.length; i<n; i++) {
-			m = links[i].href.match(/\bid=([^&]+?)-(?:FRM|BKM)/i);
-			if(m && m[1]) {
-				ret.lstUID = m[1];
-				return ret;
+	if (url.includes('/PsycBOOKS/')) {
+		var link = attr(doc, '.bookMatterLinks a', 'href');
+		if (link) {
+			let m = link.match(/\/fulltext\/([^&]+?)-(?:FRM|BKM)/i);
+			if (m && m[1]) {
+				return m[1];
 			}
 		}
 	}
 
-	/**for pages with buy.optionToBuy
+	/** for pages with buy.optionToBuy
 	 * we can fetch the id from the url
 	 * alternatively, the id is in a javascript section (this is messy)
 	 */
-	if(url.indexOf('buy.optiontobuy') != -1) {
-		var m = url.match(/\bid=([^&]+)/);
-		if(m) {
-			ret.lstUID = m[1];
-			return ret;
+	if (url.includes('/buy/')) {
+		let m = url.match(/\/buy\/([\d-]*)/);
+		if (m) {
+			return m[1];
 		}
 
 		m = doc.documentElement.textContent.match(/\bitemUID\s*=\s*(['"])(.*?)\1/);
-		if(m && m[2]) {
-			ret.lstUID = m[2];
-			return ret;
+		if (m && m[2]) {
+			return m[2];
 		}
 	}
-}
-
-//retrieve RIS data
-//retry n times
-function fetchRIS(url, post, itemType, doc, retry) {
-	//language only available on the page;
-	var language = ZU.xpathText(doc, '//meta[@name="citation_language"]/@content');
-	ZU.doPost(url, post, function(text) {
-		//There's some cookie/session magic going on
-		//our first request for RIS might not succeed
-		var foundRIS = (text.indexOf('TY  - ') != -1);
-		if(!foundRIS && retry) {
-			//retry
-			Z.debug('No RIS data. Retrying (' + retry + ').');
-			fetchRIS(url, post, itemType, doc, --retry);
-			return;
-		} else if(!foundRIS) {
-			Z.debug('No RIS data. Falling back to scraping the page directly.');
-			scrapePage(doc, itemType);
-			return;
-		}
-		
-		//clean up (double) spacing in RIS
-		text = text.replace(/  +/g, ' ');
-		//Z.debug(text)
-		var translator = Zotero.loadTranslator("import");
-		translator.setTranslator("32d59d2d-b65a-4da4-b0a3-bdd3cfb979e7");
-
-		//Some authors are not entered according to spec
-		//We try to fix places where multiple authors are entered in one entry
-		text = text.replace(/^((?:A[U123]|ED) - )(.+?)$/mg,
-			function(match, tag, authors) {
-				var authorRE = /((?:[A-Z](?:\.?\s|\.))+)([-A-Za-z]+)/g;
-				var author, newStr='';
-				while(author = authorRE.exec(authors)) {
-					if(newStr) {	//not the first author
-						newStr += '\r\n';
-					}
-
-					newStr += tag + author[2] + ', ' + author[1].trim();
-				}
-
-				if(newStr) {
-					return newStr;
-				} else {	//we didn't find any authors
-					return match;
-				}
-			}
-		);
-			
-		text = text.replace(/^DESCRIPTORS -.+/gm, "");
-		
-		translator.setString(text);
-		translator.setHandler("itemDone", function(obj, item) {
-			//item.url = newurl;
-			
-			item.title = item.title.replace(/\.$/,'');
-			if (item.ISSN) {
-				var ISSN = item.ISSN.split(/\s*;\s*/);
-				var ISSNArray = [];
-				for (var i=0; i<ISSN.length; i++) {
-					ISSNArray.push(ZU.cleanISSN(ISSN[i]));
-				}
-				item.ISSN = ISSNArray.join(" ");
-				item.language = language;
-			}
-			finalizeItem(item, doc);		
-		});
-		translator.translate();
-	});
-}
-
-//scrape directly from page
-function scrapePage(doc, type) {
-	Z.debug('Attempting to scrape directly from page');
-	var item = new Zotero.Item(type);
-	item.title = getField(fields.title, doc);
-	if(!item.title) item.title = getField('obArticleTitleHighlighted', doc);
-	if(!item.title) item.title = getField('bwcBookTitle', doc);
-
-	var authors = getField(fields.authors, doc);
-	if(authors) {
-		authors = authors.replace(/^by\s+/i, '').split(/\s*;\s+/);
-		var m, creatorType, name;
-		for(var i=0, n=authors.length; i<n; i++) {
-			m = authors[i].match(/^(.+?)\s?\((\w+)\)$/);
-			if(m) {
-				creatorType = creatorMap[m[2]];
-				name = m[1];
-			} else {
-				creatorType = 'author';
-				name = authors[i];
-			}
-			item.creators.push(ZU.cleanAuthor(name, creatorType, true));
-		}
-	}
-
-	var voliss = getField(fields.voliss, doc);
-	if(voliss
-		&& (voliss = voliss.match(volissRe[type]))) {
-		switch(type) {
-			case 'journalArticle':
-				item.publicationTitle = voliss[1];
-				item.volume = voliss[2];
-				item.issue = voliss[3];
-				item.date = voliss[4];
-				item.pages = voliss[5];
-				item.DOI = voliss[6];
-			break;
-			case 'bookSection':
-				var eds = voliss[1].split(/\s*;\s*/);
-				var m, name, creatorType;
-				for(var i=0, n=eds.length; i<n; i++) {
-					m = eds[i].match(/^(.+?)(?:\s\((\w+)\))?$/);
-					if(m) {
-						creatorType = creatorMap[m[2]] || 'editor';
-						item.creators.push(
-							ZU.cleanAuthor(m[1], creatorType, true)
-						);
-					}
-				}
-				item.date = voliss[2];
-				item.bookTitle = voliss[3];
-				item.pages = voliss[4];
-				item.place = voliss[5];
-				item.publisher = voliss[6];
-				item.volume = voliss[7];
-				item.numPages = voliss[8];
-				item.DOI = voliss[9];
-			break;
-			case 'book':
-				item.place = voliss[1];
-				item.publisher = voliss[2];
-				item.date = voliss[3];
-				item.volume = voliss[4];
-				item.numPages = voliss[5];
-				item.DOI = voliss[6];
-			break;
-		}
-	}
-
-	item.abstractNote = getField(fields.abstract, doc);
-
-	finalizeItem(item, doc);
-}
-
-function finalizeItem(item, doc) {
-
-	var pdfurl = ZU.xpathText(doc, '//meta[@name="citation_pdf_url"]/@content');
-	if (!pdfurl) pdfurl = ZU.xpathText(doc, '//li[contains(@class, "PDF") and contains(@href, ".pdf")]/@href');
-	//clean up abstract and get copyright info
-	if(item.abstractNote) {
-		var m = item.abstractNote.match(/^(.+)\([^)]+(\(c\)[^)]+)\)$/i);
-		if(m) {
-			item.abstractNote = m[1];
-			item.rights = m[2];
-		}
-	}
-
-	//for books, volume is in the same field as numPages
-	if(item.itemType == 'book' && item.numPages) {
-		var m = item.numPages.match(/^(\w+)\s*,\s*(\d+)$/);
-		if(m) {
-			item.volume = m[1];
-			item.numPages = m[2];
-		}
-	}
-	if (pdfurl) item.attachments =[{url: pdfurl, title: "APA Psycnet Fulltext PDF", mimeType: "application/pdf"}]
-	else item.attachments = [{title:"APA PsycNET Snapshot",	document:doc}] 
 	
-	item.complete();
+	/** check for a purchase link
+	 */
+	var purchaseLink = attr(doc, 'a.purchase[href*="/buy/"]', 'href');
+	if (purchaseLink) {
+		let m = purchaseLink.match(/\/buy\/([\d-]*)/);
+		return m[1];
+	}
+
+	// Worst-case fallback if we're on a search result page: make some requests
+	if (url.includes('/search/display?')) {
+		let searchParams = new URL(url).searchParams;
+		let id = searchParams.get('id');
+		if (id) {
+			let searchObj = await requestJSON('/api/request/recentSearch.get', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					api: 'recentSearch.get',
+					params: {
+						id
+					}
+				})
+			});
+			let recordId = parseInt(searchParams.get('recordId'));
+			let recordWithCount = await requestJSON('/api/request/search.recordWithCount', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					api: 'search.recordWithCount',
+					params: {
+						...searchObj,
+						responseParameters: {
+							...searchObj.responseParameters,
+							start: recordId - 1,
+							rows: 1
+						}
+					}
+				})
+			});
+			return recordWithCount.results.result.doc[0].UID;
+		}
+	}
+	
+	return false;
 }
 
-function scrape (doc, newurl, type) {
-	if(!type) type = detectWeb(doc, newurl);
-	var ids = getIds(doc, newurl);
-	var id = ids.id;
-	var lstUID = ids.lstUID;
-	if (id || lstUID) {
-		var url = '/index.cfm?fa=search.export'
-		var post = 'id=' + id + '&lstUIDs=' + lstUID
-			+ '&records=records&exportFormat=referenceSoftware';
-		Zotero.debug("Url: " + url);
-		Zotero.debug("Post: " + post);
-		fetchRIS(url, post, type, doc, 1);
-	} else {
-		scrapePage(doc, type);
+
+function cleanTitle(title) {
+	// delete point at the end of a title,
+	// except it looks like an abbreviation
+	if (/\b\w\.$/.test(title)) {
+		return title;
 	}
-}/** BEGIN TEST CASES **/
+	else {
+		return title.replace(/\.$/, '');
+	}
+}
+
+/** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/index.cfm?fa=search.displayRecord&uid=2004-16644-010",
+		"url": "https://psycnet.apa.org/record/2004-16644-010",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -393,32 +368,48 @@ var testCases = [
 				],
 				"date": "2004",
 				"DOI": "10.1037/0894-4105.18.3.485",
-				"ISSN": "1931-1559 0894-4105",
-				"abstractNote": "A comprehensive, empirically based review of the published studies addressing neuropsychological performance in adults diagnosed with attention-deficit/hyperactivity disorder (ADHD) was conducted to identify patterns of performance deficits. Findings from 33 published studies were submitted to a meta-analytic procedure producing sample-size-weighted mean effect sizes across test measures. Results suggest that neuropsychological deficits are expressed in adults with ADHD across multiple domains of functioning, with notable impairments in attention, behavioral inhibition, and memory, whereas normal performance is noted in simple reaction time. Theoretical and developmental considerations are discussed, including the role of behavioral inhibition and working memory impairment. Future directions for research based on these findings are highlighted, including further exploration of specific impairments and an emphasis on particular tests and testing conditions.",
+				"ISSN": "1931-1559",
+				"abstractNote": "A comprehensive, empirically based review of the published studies addressing neuropsychological performance in adults diagnosed with attention-deficit/hyperactivity disorder (ADHD) was conducted to identify patterns of performance deficits. Findings from 33 published studies were submitted to a meta-analytic procedure producing sample-size-weighted mean effect sizes across test measures. Results suggest that neuropsychological deficits are expressed in adults with ADHD across multiple domains of functioning, with notable impairments in attention, behavioral inhibition, and memory, whereas normal performance is noted in simple reaction time. Theoretical and developmental considerations are discussed, including the role of behavioral inhibition and working memory impairment. Future directions for research based on these findings are highlighted, including further exploration of specific impairments and an emphasis on particular tests and testing conditions. (PsycInfo Database Record (c) 2022 APA, all rights reserved)",
 				"issue": "3",
-				"language": "English",
-				"libraryCatalog": "APA PsycNET",
+				"libraryCatalog": "APA PsycNet",
 				"pages": "485-503",
 				"publicationTitle": "Neuropsychology",
-				"rights": "(c) 2016 APA, all rights reserved",
 				"shortTitle": "Neuropsychology of Adults With Attention-Deficit/Hyperactivity Disorder",
 				"volume": "18",
 				"attachments": [
 					{
-						"title": "APA Psycnet Fulltext PDF",
-						"mimeType": "application/pdf"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"*Attention Deficit Disorder with Hyperactivity",
-					"*Experimentation",
-					"*Neuropsychological Assessment",
-					"*Neuropsychology",
-					"Behavioral Inhibition",
-					"Empirical Methods",
-					"Hyperkinesis",
-					"Inhibition (Personality)",
-					"Reaction Time"
+					{
+						"tag": "Attention Deficit Disorder with Hyperactivity"
+					},
+					{
+						"tag": "Behavioral Inhibition"
+					},
+					{
+						"tag": "Empirical Methods"
+					},
+					{
+						"tag": "Experimentation"
+					},
+					{
+						"tag": "Hyperactivity"
+					},
+					{
+						"tag": "Inhibition (Personality)"
+					},
+					{
+						"tag": "Neuropsychological Assessment"
+					},
+					{
+						"tag": "Neuropsychology"
+					},
+					{
+						"tag": "Reaction Time"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -427,7 +418,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/journals/xge/50/5/325/",
+		"url": "https://psycnet.apa.org/record/1956-05944-001",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -447,26 +438,34 @@ var testCases = [
 				"date": "1955",
 				"DOI": "10.1037/h0043965",
 				"ISSN": "0022-1015",
-				"abstractNote": "Two factor analytic studies of meaningful judgments based upon the same sample of 50 bipolar descriptive scales are reported. Both analyses reveal three major connotative factors: evaluation, potency, and activity. These factors appear to be independent dimensions of the semantic space within which the meanings of concepts may be specified.",
+				"abstractNote": "Two factor analytic studies of meaningful judgments based upon the same sample of 50 bipolar descriptive scales are reported. Both analyses reveal three major connotative factors: evaluation, potency, and activity. These factors appear to be independent dimensions of the semantic space within which the meanings of concepts may be specified. (PsycINFO Database Record (c) 2016 APA, all rights reserved)",
 				"issue": "5",
-				"language": "English",
-				"libraryCatalog": "APA PsycNET",
+				"libraryCatalog": "APA PsycNet",
 				"pages": "325-338",
 				"publicationTitle": "Journal of Experimental Psychology",
-				"rights": "(c) 2016 APA, all rights reserved",
 				"volume": "50",
 				"attachments": [
 					{
-						"title": "APA Psycnet Fulltext PDF",
-						"mimeType": "application/pdf"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"*Factor Analysis",
-					"*Judgment",
-					"*Semantics",
-					"Factor Structure",
-					"Meaning"
+					{
+						"tag": "Factor Analysis"
+					},
+					{
+						"tag": "Factor Structure"
+					},
+					{
+						"tag": "Judgment"
+					},
+					{
+						"tag": "Meaning"
+					},
+					{
+						"tag": "Semantics"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -475,7 +474,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/psycinfo/1992-98221-010",
+		"url": "https://psycnet.apa.org/record/1992-98221-010",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -490,43 +490,49 @@ var testCases = [
 						"lastName": "Maser",
 						"firstName": "Jack D.",
 						"creatorType": "author"
-					},
-					{
-						"lastName": "Maser",
-						"firstName": "J. D.",
-						"creatorType": "editor"
-					},
-					{
-						"lastName": "Seligman",
-						"firstName": "M. E. P.",
-						"creatorType": "editor"
 					}
 				],
 				"date": "1977",
 				"ISBN": "9780716703686 9780716703679",
-				"abstractNote": "tonic immobility [animal hypnosis] might be a useful laboratory analog or research model for catatonia / we have been collaborating on an interdisciplinary program of research in an effort to pinpoint the behavioral antecedents and biological bases for tonic immobility / attempt to briefly summarize our findings, and . . . discuss the implications of these data in terms of the model characteristics of tonic immobility / hypnosis / catatonia, catalepsy, and cataplexy / tonic immobility as a model for catatonia / fear potentiation / fear alleviation / fear or arousal / learned helplessness / neurological correlates / pharmacology and neurochemistry / genetic underpinnings / evolutionary considerations / implications for human psychopathology",
+				"abstractNote": "tonic immobility [animal hypnosis] might be a useful laboratory analog or research model for catatonia / we have been collaborating on an interdisciplinary program of research in an effort to pinpoint the behavioral antecedents and biological bases for tonic immobility / attempt to briefly summarize our findings, and . . . discuss the implications of these data in terms of the model  characteristics of tonic immobility / hypnosis / catatonia, catalepsy, and cataplexy / tonic immobility as a model for catatonia / fear potentiation / fear alleviation / fear or arousal / learned helplessness / neurological correlates / pharmacology and neurochemistry / genetic underpinnings / evolutionary considerations / implications for human psychopathology (PsycInfo Database Record (c) 2022 APA, all rights reserved)",
 				"bookTitle": "Psychopathology: Experimental models",
-				"libraryCatalog": "APA PsycNET",
+				"libraryCatalog": "APA PsycNet",
 				"pages": "334-357",
 				"place": "New York, NY, US",
 				"publisher": "W H Freeman/Times Books/ Henry Holt & Co",
-				"rights": "(c) 2016 APA, all rights reserved",
-				"series": "A series of books in psychology.",
+				"series": "A series of books in psychology",
 				"shortTitle": "Catatonia",
 				"attachments": [
 					{
-						"title": "APA PsycNET Snapshot"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"*Catalepsy",
-					"*Catatonia",
-					"*Tonic Immobility",
-					"Animal Models",
-					"Fear",
-					"Genetics",
-					"Neurology",
-					"Pharmacology"
+					{
+						"tag": "Animal Models"
+					},
+					{
+						"tag": "Catalepsy"
+					},
+					{
+						"tag": "Catatonia"
+					},
+					{
+						"tag": "Fear"
+					},
+					{
+						"tag": "Genetics"
+					},
+					{
+						"tag": "Neurology"
+					},
+					{
+						"tag": "Pharmacology"
+					},
+					{
+						"tag": "Tonic Immobility"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -535,7 +541,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/psycinfo/2004-16329-000/",
+		"url": "https://psycnet.apa.org/record/2004-16329-000?doi=1",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "book",
@@ -548,22 +555,24 @@ var testCases = [
 					}
 				],
 				"date": "1948",
-				"abstractNote": "The author's intent is to write about abnormal people in a way that will be valuable and interesting to students new to the subject. A first course in abnormal psychology is not intended to train specialists. Its goal is more general: it should provide the student with the opportunity to whet his interest, expand his horizons, register a certain body of new facts, and relate this to the rest of his knowledge about mankind. I have tried to present the subject in such a way as to emphasize its usefulness to all students of human nature. I have tried the experiment of writing two introductory chapters, one historical and the other clinical. This reflects my desire to set the subject-matter in a broad perspective and at the same time to anchor it in concrete fact. Next comes a block of six chapters designed to set forth the topics of maladjustment and neurosis. The two chapters on psychotherapy complete the more purely psychological or developmental part of the work. In the final chapter the problem of disordered personalities is allowed to expand to its full social dimensions. Treatment, care, and prevention call for social effort and social organization. I have sought to show some of the lines, both professional and nonprofessional, along which this effort can be expended.",
-				"libraryCatalog": "APA PsycNET",
-				"numPages": "617",
+				"abstractNote": "The author's intent is to write about abnormal people in a way that will be valuable and interesting to students new to the subject. A first course in abnormal psychology is not intended to train specialists. Its goal is more general: it should provide the student with the opportunity to whet his interest, expand his horizons, register a certain body of new facts, and relate this to the rest of his knowledge about mankind. I have tried to present the subject in such a way as to emphasize its usefulness to all students of human nature. I have tried the experiment of writing two introductory chapters, one historical and the other clinical. This reflects my desire to set the subject-matter in a broad perspective and at the same time to anchor it in concrete fact. Next comes a block of six chapters designed to set forth the topics of maladjustment and neurosis. The two chapters on psychotherapy complete the more purely psychological or developmental part of the work. In the final chapter the problem of disordered personalities is allowed to expand to its full social dimensions. Treatment, care, and prevention call for social effort and social organization. I have sought to show some of the lines, both professional and nonprofessional, along which this effort can be expended. (PsycInfo Database Record (c) 2022 APA, all rights reserved)",
+				"extra": "DOI: 10.1037/10023-000",
+				"libraryCatalog": "APA PsycNet",
+				"numPages": "x, 617",
 				"place": "New York, NY, US",
 				"publisher": "Ronald Press Company",
-				"rights": "(c) 2016 APA, all rights reserved",
+				"series": "The abnormal personality: A textbook",
 				"shortTitle": "The abnormal personality",
-				"volume": "x",
 				"attachments": [
 					{
-						"title": "APA Psycnet Fulltext PDF",
-						"mimeType": "application/pdf"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"Abnormal Psychology"
+					{
+						"tag": "Abnormal Psychology"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -572,34 +581,87 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/books/10023",
+		"url": "https://psycnet.apa.org/fulltext/2022-40433-002.html",
 		"items": [
 			{
-				"itemType": "book",
-				"title": "The abnormal personality: A textbook",
+				"itemType": "journalArticle",
+				"title": "Expertise in emotion: A scoping review and unifying framework for individual differences in the mental representation of emotional experience",
 				"creators": [
 					{
-						"lastName": "White",
-						"firstName": "Robert W.",
+						"lastName": "Hoemann",
+						"firstName": "Katie",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Nielson",
+						"firstName": "Catie",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Yuen",
+						"firstName": "Ashley",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Gurera",
+						"firstName": "J. W.",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Quigley",
+						"firstName": "Karen S.",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Barrett",
+						"firstName": "Lisa Feldman",
 						"creatorType": "author"
 					}
 				],
-				"date": "1948",
-				"abstractNote": "The author's intent is to write about abnormal people in a way that will be valuable and interesting to students new to the subject. A first course in abnormal psychology is not intended to train specialists. Its goal is more general: it should provide the student with the opportunity to whet his interest, expand his horizons, register a certain body of new facts, and relate this to the rest of his knowledge about mankind. I have tried to present the subject in such a way as to emphasize its usefulness to all students of human nature. I have tried the experiment of writing two introductory chapters, one historical and the other clinical. This reflects my desire to set the subject-matter in a broad perspective and at the same time to anchor it in concrete fact. Next comes a block of six chapters designed to set forth the topics of maladjustment and neurosis. The two chapters on psychotherapy complete the more purely psychological or developmental part of the work. In the final chapter the problem of disordered personalities is allowed to expand to its full social dimensions. Treatment, care, and prevention call for social effort and social organization. I have sought to show some of the lines, both professional and nonprofessional, along which this effort can be expended.",
-				"libraryCatalog": "APA PsycNET",
-				"numPages": "617",
-				"place": "New York, NY, US",
-				"publisher": "Ronald Press Company",
-				"rights": "(c) 2016 APA, all rights reserved",
-				"shortTitle": "The abnormal personality",
-				"volume": "x",
+				"date": "2021",
+				"DOI": "10.1037/bul0000327",
+				"ISSN": "1939-1455",
+				"abstractNote": "Expertise refers to outstanding skill or ability in a particular domain. In the domain of emotion, expertise refers to the observation that some people are better at a range of competencies related to understanding and experiencing emotions, and these competencies may help them lead healthier lives. These individual differences are represented by multiple constructs including emotional awareness, emotional clarity, emotional complexity, emotional granularity, and emotional intelligence. These constructs derive from different theoretical perspectives, highlight different competencies, and are operationalized and measured in different ways. The full set of relationships between these constructs has not yet been considered, hindering scientific progress and the translation of findings to aid mental and physical well-being. In this article, we use a scoping review procedure to integrate these constructs within a shared conceptual space. Scoping reviews provide a principled means of synthesizing large and diverse literature in a transparent fashion, enabling the identification of similarities as well as gaps and inconsistencies across constructs. Using domain-general accounts of expertise as a guide, we build a unifying framework for expertise in emotion and apply this to constructs that describe how people understand and experience their own emotions. Our approach offers opportunities to identify potential mechanisms of expertise in emotion, encouraging future research on those mechanisms and on educational or clinical interventions. (PsycInfo Database Record (c) 2023 APA, all rights reserved)",
+				"issue": "11",
+				"libraryCatalog": "APA PsycNet",
+				"pages": "1159-1183",
+				"publicationTitle": "Psychological Bulletin",
+				"shortTitle": "Expertise in emotion",
+				"volume": "147",
 				"attachments": [
 					{
-						"title": "APA PsycNET Snapshot"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"Abnormal Psychology"
+					{
+						"tag": "Alexithymia"
+					},
+					{
+						"tag": "Awareness"
+					},
+					{
+						"tag": "Conceptual Imagery"
+					},
+					{
+						"tag": "Creativity"
+					},
+					{
+						"tag": "Emotional Intelligence"
+					},
+					{
+						"tag": "Emotions"
+					},
+					{
+						"tag": "Experience Level"
+					},
+					{
+						"tag": "Experiences (Events)"
+					},
+					{
+						"tag": "Individual Differences"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -608,7 +670,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/index.cfm?fa=buy.optionToBuy&id=2004-16329-002",
+		"url": "http://psycnet.apa.org/buy/2004-16329-002",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -621,22 +684,26 @@ var testCases = [
 					}
 				],
 				"date": "1948",
-				"abstractNote": "This chapter examines some representative examples of disordered personalities. The reader should be forewarned that the five cases described here will be frequently referred to in later chapters of the book. They display to advantage many of the problems and principles that will occupy us when we undertake to build up a systematic account of abnormal psychology. It will be assumed that the cases given in this chapter are well remembered, and with this in mind the reader should not only go through them but study and compare them rather carefully. The main varieties of disordered personalities and student attitudes toward abnormality are discussed before the case histories are presented.",
+				"abstractNote": "This chapter examines some representative examples of disordered personalities. The reader should be forewarned that the five cases described here will be frequently referred to in later chapters of the book. They display to advantage many of the problems and principles that will occupy us when we undertake to build up a systematic account of abnormal psychology. It will be assumed that the cases given in this chapter are well remembered, and with this in mind the reader should not only go through them but study and compare them rather carefully. The main varieties of disordered personalities and student attitudes toward abnormality are discussed before the case histories are presented. (PsycINFO Database Record (c) 2016 APA, all rights reserved)",
 				"bookTitle": "The abnormal personality: A textbook",
+				"extra": "DOI: 10.1037/10023-002",
 				"libraryCatalog": "APA PsycNET",
 				"pages": "54-101",
 				"place": "New York, NY, US",
 				"publisher": "Ronald Press Company",
-				"rights": "(c) 2016 APA, all rights reserved",
 				"shortTitle": "Clinical introduction",
 				"attachments": [
 					{
-						"title": "APA PsycNET Snapshot"
+						"title": "Snapshot"
 					}
 				],
 				"tags": [
-					"*Abnormal Psychology",
-					"Personality Disorders"
+					{
+						"tag": "Abnormal Psychology"
+					},
+					{
+						"tag": "Personality Disorders"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -645,7 +712,7 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/index.cfm?fa=buy.optionToBuy&id=2010-19350-001",
+		"url": "https://psycnet.apa.org/record/2010-19350-001",
 		"items": [
 			{
 				"itemType": "journalArticle",
@@ -679,26 +746,38 @@ var testCases = [
 				],
 				"date": "2010",
 				"DOI": "10.1037/a0020280",
-				"ISSN": "1939-2222 0096-3445",
-				"abstractNote": "Social scientists often rely on economic experiments such as ultimatum and dictator games to understand human cooperation. Systematic deviations from economic predictions have inspired broader conceptions of self-interest that incorporate concerns for fairness. Yet no framework can describe all of the major results. We take a different approach by asking players directly about their self-interest—defined as what they want to do (pleasure-maximizing options). We also ask players directly about their sense of fairness—defined as what they think they ought to do (fairness-maximizing options). Player-defined measures of self-interest and fairness predict (a) the majority of ultimatum-game and dictator-game offers, (b) ultimatum-game rejections, (c) exiting behavior (i.e., escaping social expectations to cooperate) in the dictator game, and (d) who cooperates more after a positive mood induction. Adopting the players' perspectives of self-interest and fairness permits better predictions about who cooperates, why they cooperate, and when they punish noncooperators.",
+				"ISSN": "1939-2222",
+				"abstractNote": "Social scientists often rely on economic experiments such as ultimatum and dictator games to understand human cooperation. Systematic deviations from economic predictions have inspired broader conceptions of self-interest that incorporate concerns for fairness. Yet no framework can describe all of the major results. We take a different approach by asking players directly about their self-interest—defined as what they want to do (pleasure-maximizing options). We also ask players directly about their sense of fairness—defined as what they think they ought to do (fairness-maximizing options). Player-defined measures of self-interest and fairness predict (a) the majority of ultimatum-game and dictator-game offers, (b) ultimatum-game rejections, (c) exiting behavior (i.e., escaping social expectations to cooperate) in the dictator game, and (d) who cooperates more after a positive mood induction. Adopting the players' perspectives of self-interest and fairness permits better predictions about who cooperates, why they cooperate, and when they punish noncooperators. (PsycINFO Database Record (c) 2016 APA, all rights reserved)",
 				"issue": "4",
-				"libraryCatalog": "APA PsycNET",
+				"libraryCatalog": "APA PsycNet",
 				"pages": "743-755",
 				"publicationTitle": "Journal of Experimental Psychology: General",
-				"rights": "(c) 2016 APA, all rights reserved",
 				"volume": "139",
 				"attachments": [
 					{
-						"title": "APA PsycNET Snapshot"
+						"title": "Snapshot",
+						"mimeType": "text/html"
 					}
 				],
 				"tags": [
-					"*Economics",
-					"*Games",
-					"*Prediction",
-					"Behavior",
-					"Cooperation",
-					"Emotional States"
+					{
+						"tag": "Behavior"
+					},
+					{
+						"tag": "Cooperation"
+					},
+					{
+						"tag": "Economics"
+					},
+					{
+						"tag": "Emotional States"
+					},
+					{
+						"tag": "Games"
+					},
+					{
+						"tag": "Prediction"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
@@ -707,7 +786,8 @@ var testCases = [
 	},
 	{
 		"type": "web",
-		"url": "http://psycnet.apa.org/books/12348/002",
+		"url": "https://psycnet.apa.org/record/2010-09295-002",
+		"defer": true,
 		"items": [
 			{
 				"itemType": "bookSection",
@@ -717,38 +797,114 @@ var testCases = [
 						"lastName": "Savickas",
 						"firstName": "Mark L.",
 						"creatorType": "author"
-					},
-					{
-						"lastName": "Hartung",
-						"firstName": "P. J.",
-						"creatorType": "editor"
-					},
-					{
-						"lastName": "Subich",
-						"firstName": "L. M.",
-						"creatorType": "editor"
 					}
 				],
 				"date": "2011",
 				"ISBN": "9781433808616 9781433808623",
-				"abstractNote": "In this chapter, I seek to redress vocational psychology’s inattention to the self and address the ambiguity of the meaning of self. To begin, I offer a chronological survey of vocational psychology’s three main views of human singularity. During succeeding historical eras, different aspects of human singularity interested vocational psychologists, so they developed a new set of terms and concepts to deal with shifts in the meaning of individuality. Over time, vocational psychology developed what Kuhn (2000) referred to as language communities, each with its own paradigm for understanding the self and vocational behavior. Because the self is fundamentally ambiguous, adherents to each paradigm describe it with an agreed on language and metaphors. Thus, each paradigm has a textual tradition, or way of talking about the self. As readers shall see, when they talk about individuals, differentialists use the language of personality, developmentalists use the language of personhood, and constructionists use the language of identity.",
+				"abstractNote": "In this chapter, I seek to redress vocational psychology’s inattention to the self and address the ambiguity of the meaning of self. To begin, I offer a chronological survey of vocational psychology’s three main views of human singularity. During succeeding historical eras, different aspects of human singularity interested vocational psychologists, so they developed a new set of terms and concepts to deal with shifts in the meaning of individuality. Over time, vocational psychology developed what Kuhn (2000) referred to as language communities, each with its own paradigm for understanding the self and vocational behavior. Because the self is fundamentally ambiguous, adherents to each paradigm describe it with an agreed on language and metaphors. Thus, each paradigm has a textual tradition, or way of talking about the self. As readers shall see, when they talk about individuals, differentialists use the language of personality, developmentalists use the language of personhood, and constructionists use the language of identity. (PsycInfo Database Record (c) 2024 APA, all rights reserved)",
 				"bookTitle": "Developing self in work and career: Concepts, cases, and contexts",
-				"libraryCatalog": "APA PsycNET",
+				"extra": "DOI: 10.1037/12348-002",
+				"libraryCatalog": "APA PsycNet",
 				"pages": "17-33",
 				"place": "Washington, DC, US",
 				"publisher": "American Psychological Association",
-				"rights": "(c) 2016 APA, all rights reserved",
 				"shortTitle": "The self in vocational psychology",
 				"attachments": [
 					{
-						"title": "APA Psycnet Fulltext PDF",
+						"title": "Full Text PDF",
 						"mimeType": "application/pdf"
 					}
 				],
 				"tags": [
-					"*Occupational Guidance",
-					"*Personality",
-					"Self-Concept"
+					{
+						"tag": "Occupational Guidance"
+					},
+					{
+						"tag": "Personality"
+					},
+					{
+						"tag": "Self-Concept"
+					}
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://psycnet.apa.org/record/2025-80032-001?doi=1",
+		"items": [
+			{
+				"itemType": "journalArticle",
+				"title": "Linking adolescent bullying perpetration with adult fertility: Two preliminary studies",
+				"creators": [
+					{
+						"lastName": "Volk",
+						"firstName": "Anthony A.",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Brazil",
+						"firstName": "Kristopher J.",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Dane",
+						"firstName": "Andrew V.",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Vaillancourt",
+						"firstName": "Tracy",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Al-Jbouri",
+						"firstName": "Elizabeth",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Farrell",
+						"firstName": "Ann H.",
+						"creatorType": "author"
+					}
+				],
+				"date": "2025",
+				"DOI": "10.1037/ebs0000374",
+				"ISSN": "2330-2933",
+				"abstractNote": "Researchers have suggested that bullying perpetration is, at least in part, an evolved adaptation. A key prediction of this evolutionary perspective is that bullying facilitates the transmission of genes from one generation to the next. To date, only one study (using a limited measure of bullying) has examined the link between adolescent bullying and adult fertility, showing a positive association between adolescent bullying and number of children in adulthood. We sought to replicate and expand this unique finding using a more robust measure of adolescent bullying and young adults’ parental status in a prospective longitudinal study of Canadians (Study 1), along with an MTurk study of retrospective adolescent bullying and current adult fertility (Study 2). In support of an evolutionary theory of bullying, we found that higher bullying was associated with having children in young adulthood (ages 23 and/or 24 years, Study 1) and that retrospective reports of adolescent bullying were associated with having more children in adulthood (Study 2). Overall, our studies offer additional support for the idea that adolescent bullying is, at least in part, an evolutionary adaptation that may help individuals to later pass on their genes to future generations through enhanced reproductive and perhaps parental effort. Although needing replication, our data highlight the importance of considering reproductive outcomes when designing future bullying research or interventions. (PsycInfo Database Record (c) 2025 APA, all rights reserved)",
+				"libraryCatalog": "APA PsycNet",
+				"publicationTitle": "Evolutionary Behavioral Sciences",
+				"shortTitle": "Linking adolescent bullying perpetration with adult fertility",
+				"attachments": [
+					{
+						"title": "Snapshot",
+						"mimeType": "text/html"
+					}
+				],
+				"tags": [
+					{
+						"tag": "Adaptation"
+					},
+					{
+						"tag": "Adolescent Characteristics"
+					},
+					{
+						"tag": "Bullying"
+					},
+					{
+						"tag": "Fertility"
+					},
+					{
+						"tag": "Genes"
+					},
+					{
+						"tag": "Parenthood Status"
+					},
+					{
+						"tag": "Theory of Evolution"
+					}
 				],
 				"notes": [],
 				"seeAlso": []
